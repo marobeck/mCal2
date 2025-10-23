@@ -6,6 +6,10 @@ project(mCal2
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_C_STANDARD 11)
 
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
 # Collect all sources in src/
 file(GLOB_RECURSE SOURCES src/*.cpp src/*.c)
 

@@ -1,14 +1,13 @@
 #include <QApplication>
-#include <QLabel>
+#include "GUI/mainwindow.h"
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    QLabel label("Hello, World!");
-    label.resize(200, 100);              // Set window size
-    label.setAlignment(Qt::AlignCenter); // Center text
-    label.show();
+    MainWindow window;
+    window.resize(1200, 800);
+    window.show();
 
     return app.exec();
 }
