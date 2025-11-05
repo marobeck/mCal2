@@ -29,7 +29,4 @@ void DayScheduleView::paintEvent(QPaintEvent *)
         p.drawLine(0, y, width(), y);
         p.drawText(5, y - 2, QString("%1:00").arg(hour, 2, 10, QChar('0')));
     }
-
-    // Front label
-    p.drawText(rect().center(), "Schedule Placeholder");
 }
