@@ -1,3 +1,9 @@
+/**
+ * mainwindow.cpp
+ * 
+ * Overview of tasks, timeline, and projects.
+ */
+
 #include "mainwindow.h"
 #include <QTimer>
 #include <QDateTime>
