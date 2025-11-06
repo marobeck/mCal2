@@ -1,18 +1,17 @@
 /** habit.h
  * This library manages the relational database responsible for habit and habit management
  */
-#ifndef HABIT_H
-#define HABIT_H
+#pragma once
 
 #include <sqlite3.h>
 #include <time.h>
 
-#include "../defs.h"
+#include "defs.h"
 
 typedef struct
 {
     char task_uuid[UUID_LEN];
-    char date[DATE_LEN];    // YYYY-MM-DD
+    char date[DATE_LEN]; // YYYY-MM-DD
 } habit_t;
 
 // ------------------------------------------ DATABASE --------------------------------------------
@@ -43,5 +42,3 @@ int habitentry_is_completed_db(sqlite3 *db, const char *habit_id, time_t datetim
 /// @param wday Day of the week starting on Sunday (0-6)
 ///             Defined in tm struct
 int habitentry_is_due_db(sqlite3 *db, const char *habit_id, time_t datetime);
-
-#endif

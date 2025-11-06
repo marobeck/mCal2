@@ -42,8 +42,16 @@ MainWindow::MainWindow(QWidget *parent)
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setWidget(todoContainer);
 
+    /** TODO: Implement
+     * Read each item in the task object to Qt5
+     * listitems(task* e)
+     * 
+     * for each timeblock:
+     *  timeblock.tasks.traverse_forward(listitems(e))
+     */
+
     // Add lists to container instead of root directly
-    int numberOfLists = 10; // Now unlimited lists possible!
+    int numberOfLists = 10;
     for (int i = 0; i < numberOfLists; ++i)
     {
         QListWidget *list = new QListWidget(this);

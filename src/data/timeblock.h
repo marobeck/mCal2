@@ -1,5 +1,4 @@
-#ifndef TIMEBLOCK_H
-#define TIMEBLOCK_H
+#pragma once
 
 #include <time.h>
 
@@ -18,11 +17,9 @@ typedef struct
     time_t start;      // For single events; Time since epoch
     time_t day_start;  // For weekly events; Time since start of day
 
-    task_t *tasks;
+    Task *tasks;
 } timeblock_t;
 
 // Interface
 timeblock_t create_timeblock(const char *name, const char *desc, int day_flags, time_t duration, time_t start_or_day_start);
 int timeblock_is_active(const timeblock_t *tb, time_t now);
-
-#endif

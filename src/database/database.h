@@ -15,7 +15,7 @@ int db_load_timeblocks(sqlite3 *db, timeblock_t **timeblocks, int *count);
 int db_delete_timeblock(sqlite3 *db, const char *uuid);
 
 // ----------------------------------------- Task Data --------------------------------------------
-int db_insert_task(sqlite3 *db, const task_t *task);
+int db_insert_task(sqlite3 *db, const Task *task);
 int db_load_tasks(sqlite3 *db, const char *timeblock_uuid, task_t **tasks, int *count);
 int db_update_task_status(sqlite3 *db, const char *uuid, TASK_STATUS new_status);
 int db_delete_task(sqlite3 *db, const char *uuid);
