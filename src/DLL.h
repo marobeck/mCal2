@@ -1,5 +1,4 @@
-#ifndef DLL_H
-#define DLL_H
+#pragma once
 
 #include <stddef.h>
 
@@ -13,12 +12,11 @@ typedef struct Node
 
 class DoublyLinkedList
 {
-private:
+public:
     Node *head;  // First element in list
     Node *tail;  // Last element in list
     size_t size; // Size of list
 
-public:
     /**
      * Creates an empty linked list
      */
@@ -71,5 +69,3 @@ public:
      */
     void traverse_backward(void (*func)(void *));
 };
-
-#endif // DLL_H
