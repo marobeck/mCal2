@@ -28,6 +28,7 @@ class Task
 public:
     char name[NAME_LEN]; // Title of entry
     char desc[DESC_LEN]; // Verbose description of entry
+    Task *prereq = NULL; // Task that must be completed prior to completing this one.
 
     /* -------------------------------- Location -------------------------------- */
     char uuid[UUID_LEN]; // UUID string of entry
@@ -61,5 +62,4 @@ public:
     /* ------------------------------ Handle habit ------------------------------ */
 
     void update_due_date();
-
 };

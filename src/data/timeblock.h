@@ -1,6 +1,7 @@
 #pragma once
 
 #include <time.h>
+#include <vector>
 
 #include "task.h"
 #include "habit.h"
@@ -17,7 +18,7 @@ typedef struct
     time_t start;      // For single events; Time since epoch
     time_t day_start;  // For weekly events; Time since start of day
 
-    Task *tasks;
+    std::vector<Task> tasks;
 } timeblock_t;
 
 // Interface
