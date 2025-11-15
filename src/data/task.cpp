@@ -8,15 +8,31 @@
 
 Task::Task()
 {
+    name = strdup("");
+    desc = strdup("");
+
     std::memset(uuid, 0, sizeof(uuid));
     std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
-    std::memset(name, 0, sizeof(name));
-    std::memset(desc, 0, sizeof(desc));
     std::memset(completed_days, 0, sizeof(completed_days));
 
     due_date = 0;
-    urgency = 0;
-    priority = PRIORITY_MEDIUM;
+    priority = Priority::NONE;
+    status = INCOMPLETE;
+    frequency = 0;
+    day_frequency = 0;
+}
+
+Task::Task(const char *name_, const char *desc_, Priority priority)
+{
+    name = strdup(name_);
+    desc = strdup(desc_);
+
+    std::memset(uuid, 0, sizeof(uuid));
+    std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
+    std::memset(completed_days, 0, sizeof(completed_days));
+
+    due_date = 0;
+    priority = priority;
     status = INCOMPLETE;
     frequency = 0;
     day_frequency = 0;
