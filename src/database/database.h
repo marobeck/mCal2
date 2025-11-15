@@ -7,6 +7,14 @@
 #include "timeblock.h"
 #include "task.h"
 
+// Utility: Generate UUID string
+void generate_uuid(char *uuid_buf)
+{
+    uuid_t binuuid;
+    uuid_generate_random(binuuid);
+    uuid_unparse_lower(binuuid, uuid_buf);
+}
+
 int init_db(sqlite3 **db);
 
 // --------------------------------------- Timeblock Data -----------------------------------------
