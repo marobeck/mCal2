@@ -1,13 +1,14 @@
 /**
  * mainwindow.cpp
- * 
+ *
  * Overview of tasks, timeline, and projects.
  */
 
 #include "mainwindow.h"
+
+// Qt functions
 #include <QTimer>
 #include <QDateTime>
-#include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QScrollArea>
@@ -30,8 +31,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // --- Right side: todo lists ---
     // Container for all todo lists
-    QWidget *todoContainer = new QWidget(this);
-    QHBoxLayout *todoLayout = new QHBoxLayout(todoContainer);
+    todoContainer = new QWidget(this);
+    todoLayout = new QHBoxLayout(todoContainer);
     todoLayout->setContentsMargins(0, 0, 0, 0);
     todoLayout->setSpacing(10);
 
@@ -41,29 +42,6 @@ MainWindow::MainWindow(QWidget *parent)
     scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setWidget(todoContainer);
-
-    /** TODO: Implement
-     * Read each item in the task object to Qt5
-     * listitems(task* e)
-     * 
-     * for each timeblock:
-     *  timeblock.tasks.traverse_forward(listitems(e))
-     */
-
-    // Add lists to container instead of root directly
-    int numberOfLists = 10;
-    for (int i = 0; i < numberOfLists; ++i)
-    {
-        QListWidget *list = new QListWidget(this);
-        list->addItem(QString("Task List %1").arg(i + 1));
-        list->addItem(QString("======================================================================"));
-        list->addItem(QString("wawa"));
-
-        // Keep track for backend use
-        todoLists.append(list);
-
-        todoLayout->addWidget(list);
-    }
 
     // Final placement beside the schedule
     QHBoxLayout *rootLayout = new QHBoxLayout;
@@ -85,4 +63,36 @@ MainWindow::MainWindow(QWidget *parent)
 void MainWindow::updateDateTime()
 {
     dateTimeLabel->setText(QDateTime::currentDateTime().toString("dddd, MMM d  hh:mm:ss"));
+}
+
+void MainWindow::updateTasklists(const std::vector<Timeblock> &timeblocks)
+{
+    // Remove old widgets from layout
+    while (QLayoutItem *item = todoLayout->takeAt(0))
+    {
+        QWidget *w = item->widget();
+        if (w)
+            w->deleteLater();
+        delete item;
+    }
+
+    todoLists.clear();
+
+    // Add lists to container instead of root directly
+    for (size_t i = 0; i < timeblocks.size(); i++)
+    {
+        QListWidget *list = new QListWidget(this);
+        list->addItem(QString(timeblocks[i].name));
+
+        // Print names per task
+        for (size_t j = 0; j < timeblocks[i].tasks.size(); j++)
+        {
+            list->addItem(QString(timeblocks[i].tasks[j].name));
+        }
+
+        // Keep track for backend use
+        todoLists.append(list);
+
+        todoLayout->addWidget(list);
+    }
 }
