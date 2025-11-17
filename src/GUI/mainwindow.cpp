@@ -5,6 +5,8 @@
  */
 
 #include "mainwindow.h"
+// Widgets
+#include "taskitemwidget.h"
 
 // Qt functions
 #include <QTimer>
@@ -62,12 +64,13 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::updateDateTime()
 {
-    dateTimeLabel->setText(QDateTime::currentDateTime().toString("dddd, MMM d  hh:mm:ss"));
+    dateTimeLabel->setText(QDateTime::currentDateTime().toString("hh:mm:ss\ndddd, MMM d"));
 }
 
 void MainWindow::updateTasklists(const std::vector<Timeblock> &timeblocks)
 {
     // Remove old widgets from layout
+    // todo: Consider caching items to avoid constant redrawing
     while (QLayoutItem *item = todoLayout->takeAt(0))
     {
         QWidget *w = item->widget();
@@ -79,20 +82,40 @@ void MainWindow::updateTasklists(const std::vector<Timeblock> &timeblocks)
     todoLists.clear();
 
     // Add lists to container instead of root directly
-    for (size_t i = 0; i < timeblocks.size(); i++)
+    for (const auto &tb : timeblocks)
     {
-        QListWidget *list = new QListWidget(this);
-        list->addItem(QString(timeblocks[i].name));
 
-        // Print names per task
-        for (size_t j = 0; j < timeblocks[i].tasks.size(); j++)
+        // --- Container for label + list ---
+        QWidget *column = new QWidget(this);
+        QVBoxLayout *colLayout = new QVBoxLayout(column);
+        colLayout->setContentsMargins(0, 0, 0, 0);
+        colLayout->setSpacing(4);
+
+        // --- Label at top ---
+        QLabel *title = new QLabel(QString(tb.name), this);
+        title->setAlignment(Qt::AlignHCenter);
+        title->setStyleSheet("font-weight: bold; font-size: 16px;");
+        colLayout->addWidget(title);
+
+        // --- Todo list ---
+        QListWidget *list = new QListWidget(this);
+
+        for (const auto &task : tb.tasks)
         {
-            list->addItem(QString(timeblocks[i].tasks[j].name));
+            QListWidgetItem *item = new QListWidgetItem(list);
+            TaskItemWidget *widget = new TaskItemWidget(task);
+
+            item->setSizeHint(widget->sizeHint());
+            list->addItem(item);
+            list->setItemWidget(item, widget);
         }
 
-        // Keep track for backend use
+        colLayout->addWidget(list);
+
+        // Track list for your backend
         todoLists.append(list);
 
-        todoLayout->addWidget(list);
+        // Add column to main horizontal layout
+        todoLayout->addWidget(column);
     }
 }
