@@ -1,6 +1,7 @@
 #pragma once
 
 #include <time.h>
+#include <string>
 
 #include "defs.h"
 
@@ -64,6 +65,11 @@ public:
      * Get urgancy of a task
      */
     int get_urgancy();
+
+    /**
+     * Provide due date as a string
+     */
+    std::string due_date_string();
 
     // --- Upkeep ---
     /**
