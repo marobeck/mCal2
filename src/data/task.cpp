@@ -1,6 +1,9 @@
 #include "task.h"
 
+#include <cmath>
 #include <cstring>
+#include <sstream>
+#include <iomanip>
 
 /* -------------------------------------------------------------------------- */
 /*                                Constructors                                */
@@ -22,7 +25,7 @@ Task::Task()
     day_frequency = 0;
 }
 
-Task::Task(const char *name_, const char *desc_, Priority priority)
+Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, char frequency_, unsigned char day_frequency_)
 {
     name = strdup(name_);
     desc = strdup(desc_);
@@ -31,11 +34,11 @@ Task::Task(const char *name_, const char *desc_, Priority priority)
     std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
     std::memset(completed_days, 0, sizeof(completed_days));
 
-    due_date = 0;
-    priority = priority;
+    due_date = due_date_;
+    priority = priority_;
     status = INCOMPLETE;
-    frequency = 0;
-    day_frequency = 0;
+    frequency = frequency_;
+    day_frequency = day_frequency_;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -134,7 +137,38 @@ void Task::update_due_date()
 /*                                  Interface                                 */
 /* -------------------------------------------------------------------------- */
 
-std::string Task::due_date_string()
+std::string Task::due_date_string() const
 {
-    
+    if (!due_date)
+    {
+        return "N/A";
+    }
+
+    // Get UTC adjusted time struct
+    std::time_t t = due_date;
+    std::tm *tm_ptr = std::localtime(&t);
+
+    // Return full time string
+    // TODO: String should be modified based on time left (i.e. year should be excluded if it's the same year as is due)
+    std::ostringstream oss;
+    oss << std::put_time(tm_ptr, "%Y-%m-%d %I:%M:%S %p");
+    return oss.str(); // Return by value
+}
+
+int Task::get_urgancy() const
+{
+    if (priority == Priority::NONE)
+    {
+        return 0;
+    }
+
+    if (!due_date)
+    {
+        return static_cast<int>(priority); // Get enumerator value
+    }
+
+    // time remaining * -1
+    std::time_t exp = std::time(nullptr) - due_date;
+
+    return pow(2, exp) + static_cast<int>(priority);
 }

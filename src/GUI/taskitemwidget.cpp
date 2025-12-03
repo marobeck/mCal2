@@ -12,11 +12,10 @@ TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
     QLabel *name = new QLabel(t.name);
     name->setStyleSheet("font-weight: bold; font-size: 14px;");
 
-    // todo: Implement task functions to neatly display said information
-    //  QLabel *due = new QLabel("Due: " + t.due_date_string());
-    //  QLabel *urgancy = new QLabel("Priority: " + QString::number(t.get_urgancy()));
+    QLabel *due = new QLabel(QString::fromStdString("Due: " + t.due_date_string()));
+    QLabel *urgancy = new QLabel("Urgancy: " + QString::number(t.get_urgancy()));
 
     layout->addWidget(name);
-    // layout->addWidget(due);
-    // layout->addWidget(urgancy);
+    layout->addWidget(due);
+    layout->addWidget(urgancy);
 }

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <time.h>
+#include <ctime>
 #include <string>
 
 #include "defs.h"
@@ -58,18 +58,22 @@ public:
      * ! Don't use in production, will leave null pointers
      */
     Task();
-    Task(const char *name_, const char *desc_, Priority priority_);
+
+    /**
+     * Creates task
+     */
+    Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, char frequency_ = 0, unsigned char day_frequency_ = 0);
 
     // --- Get parameters ---
     /**
      * Get urgancy of a task
      */
-    int get_urgancy();
+    int get_urgancy() const;
 
     /**
      * Provide due date as a string
      */
-    std::string due_date_string();
+    std::string due_date_string() const;
 
     // --- Upkeep ---
     /**
