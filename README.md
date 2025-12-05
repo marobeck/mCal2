@@ -7,5 +7,5 @@ As I accumulate projects, I found that my tasks no longer were independent of ea
 Design objectives:
 - A todo list that can be quickly added to.
 - Clear work-life seperation between tasks, habits, and hobbies
-- Tackles executive dysfunction. A protocol for bringing up any task, choosing the most pressing or convient task.
+- A protocol for bringing up any task, choosing the most pressing or convient task.
 - Time blocking, time groups should be given parameters for time blocking, allowing for the user to allocate time for specific types of tasks.
