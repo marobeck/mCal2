@@ -155,20 +155,60 @@ std::string Task::due_date_string() const
     return oss.str(); // Return by value
 }
 
-int Task::get_urgancy() const
+/* ------------------------ Get the urgency of a task ----------------------- */
+
+/**
+ * Get weight multiplier for status
+ */
+inline float status_weight(TASK_STATUS s)
 {
+    // Prioritize creating new tasks over completing existing ones
+    switch (s)
+    {
+    case INCOMPLETE:
+        return 1.0f;
+    case IN_PROGRESS:
+        return 0.7f;
+    case COMPLETE:
+        return 0.0f;
+    }
+    return 0.0f;
+}
+
+/**
+ * Compute deadline pressure component based on hours left until due time
+ */
+inline float compute_deadline_pressure(time_t now, time_t due)
+{
+    const float K = 7.0f;
+    const float epsilon = 1.0f / 60.0f; // one minute
+
+    std::time_t seconds_left = difftime(due, now);
+    std::time_t hours_left = seconds_left / 3600.0;
+
+    if (hours_left <= 0)
+        return 100.0f; // massively urgent if overdue
+
+    return K / std::max(static_cast<float>(hours_left), epsilon);
+}
+
+float Task::get_urgency() const
+{
+    // Constants
+    const float K = 7.0f; // Deadline pressure constant
+    const float C = 0.8f; // Undue penalty constant
+
     if (priority == Priority::NONE)
     {
-        return 0;
+        return 0.0f;
     }
+
+    float priority_value = static_cast<float>(priority); // Get enumerator value
 
     if (!due_date)
     {
-        return static_cast<int>(priority); // Get enumerator value
+        return priority_value * C * status_weight(status);
     }
 
-    // time remaining * -1
-    std::time_t exp = std::time(nullptr) - due_date;
-
-    return pow(2, exp) + static_cast<int>(priority);
+    return priority_value * compute_deadline_pressure(time(nullptr), due_date) * status_weight(status);
 }

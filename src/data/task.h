@@ -66,9 +66,9 @@ public:
 
     // --- Get parameters ---
     /**
-     * Get urgancy of a task
+     * Get urgency of a task
      */
-    int get_urgancy() const;
+    float get_urgency() const;
 
     /**
      * Provide due date as a string

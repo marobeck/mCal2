@@ -22,13 +22,13 @@ int main(int argc, char *argv[])
     {
         Timeblock block1("Dog time", "Go meet a dog", 0x7F, (time_t)1000, (time_t)46800);
 
-        Task task1("Pet dog", "Pet a dog on the head", Priority::MEDIUM, 1764829922);
+        Task task1("Pet dog", "Pet a dog on the head", Priority::MEDIUM, 1765829922);
         Task task2("See dog", "Witness a creature", Priority::VERY_HIGH);
 
         block1.append(task1);
         block1.append(task2);
 
-        std::cout << task1.get_urgancy() << std::endl;
+        std::cout << task1.get_urgency() << std::endl;
         Blocks.push_back(block1);
     }
     {
@@ -39,7 +39,7 @@ int main(int argc, char *argv[])
     {
         Timeblock block1("Work time", "Get paid", 0x7F, (time_t)28800, (time_t)82800);
 
-        Task task1("Eat evidence", "", Priority::VERY_HIGH, 1764729922);
+        Task task1("Eat evidence", "", Priority::VERY_HIGH, 1764829922);
         block1.append(task1);
 
         Blocks.push_back(block1);
