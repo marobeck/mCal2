@@ -66,7 +66,7 @@ static void log_print(log_level_t level, const char *tag, const char *fmt, ...) 
     else
         snprintf(timestr, sizeof(timestr), "??:??:??");
 
-    fprintf(stderr, "[%s] %s (%s): ", level_str, tag, timestr);
+    fprintf(stderr, "(%s) [%s] %s: ", timestr, level_str, tag);
 
     va_list args;
     va_start(args, fmt);
