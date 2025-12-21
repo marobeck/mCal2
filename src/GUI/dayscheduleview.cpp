@@ -1,32 +1,37 @@
 #include "dayscheduleview.h"
 #include <QPainter>
 #include <QTime>
+#include <QTimer>
+#include <QDateTime>
+#include <QVBoxLayout>
+
+// Widgets
+#include "schedulewidget.h"
 
 DayScheduleView::DayScheduleView(QWidget *parent)
     : QWidget(parent)
 {
     setMinimumWidth(300);
+
+    dateTimeLabel = new QLabel("Loading...", this);
+    dateTimeLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
+
+    ScheduleWidget *scheduleWidget = new ScheduleWidget(this);
+
+    QVBoxLayout *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(10, 10, 10, 10);
+    layout->addWidget(dateTimeLabel);
+    layout->addWidget(scheduleWidget, 1);
+
+    // Timer updates the clock once a second
+    QTimer *timer = new QTimer(this);
+    connect(timer, &QTimer::timeout, this, &DayScheduleView::updateDateTime);
+    timer->start(1000);
+
+    updateDateTime();
 }
 
-void DayScheduleView::paintEvent(QPaintEvent *)
+void DayScheduleView::updateDateTime()
 {
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing);
-
-    // Background
-    p.fillRect(rect(), QColor(240, 240, 240));
-
-    // Draw hourly markers
-    int totalHours = 24;
-    int h = height();
-    int lineSpacing = h / totalHours;
-
-    p.setPen(QPen(Qt::black, 1));
-
-    for (int hour = 0; hour <= totalHours; ++hour)
-    {
-        int y = hour * lineSpacing;
-        p.drawLine(0, y, width(), y);
-        p.drawText(5, y - 2, QString("%1:00").arg(hour, 2, 10, QChar('0')));
-    }
+    dateTimeLabel->setText(QDateTime::currentDateTime().toString("hh:mm:ss\ndddd, MMM d"));
 }

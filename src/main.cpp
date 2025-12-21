@@ -16,6 +16,8 @@ int main(int argc, char *argv[])
     window.resize(1200, 800);
     window.show();
 
+    /* -------------------------------- Test data ------------------------------- */
+
     std::vector<Timeblock> Blocks;
 
     // Pet a dog every day at 13:00 for ~20 minutes
@@ -28,7 +30,6 @@ int main(int argc, char *argv[])
         block1.append(task1);
         block1.append(task2);
 
-        std::cout << task1.get_urgency() << std::endl;
         Blocks.push_back(block1);
     }
     {
@@ -44,8 +45,16 @@ int main(int argc, char *argv[])
 
         Blocks.push_back(block1);
     }
+    {
+        Timeblock block1("Soup time", "SOUP", 0x7D, (time_t)28800, (time_t)82800);
 
-    window.updateTasklists(Blocks);
+        Task task1("Eat Soup", "", Priority::VERY_LOW, 1764929922);
+        block1.append(task1);
+
+        Blocks.push_back(block1);
+    }
+
+    window.todoListView->updateTasklists(Blocks);
 
     return app.exec();
 }
