@@ -2,6 +2,7 @@
 
 #include <ctime>
 #include <string>
+#include <sqlite3.h>
 
 #include "defs.h"
 
@@ -29,7 +30,7 @@ class Task
 {
 private:
     // --- Location ---
-    //? Probably unneccessary, only used for database fetching
+    // Used for database fetching
     char uuid[UUID_LEN]; // UUID string of entry
     char timeblock_uuid[UUID_LEN];
 
@@ -80,4 +81,11 @@ public:
      * Updates the due date of a if a task is repeating, otherwise does nothing
      */
     void update_due_date();
+
+    // --- Database functions ---
+
+    /**
+     * TODO: Synchronize task data from database into this object
+     */
+    int synchronize_from_db(sqlite3 *db);
 };
