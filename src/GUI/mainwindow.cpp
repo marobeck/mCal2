@@ -1,12 +1,12 @@
 /**
  * mainwindow.cpp
  *
- * Overview of tasks, timeline, and projects.
+ * Manages the main application window and its scenes.
  */
 
 #include "mainwindow.h"
-// Widgets
-#include "taskitemwidget.h"
+
+#include "log.h"
 
 // Qt functions
 #include <QTimer>
@@ -14,6 +14,10 @@
 #include <QVBoxLayout>
 #include <QSplitter>
 #include <QScrollArea>
+#include <QStackedWidget>
+
+// Widgets
+#include "taskitemwidget.h"
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -21,101 +25,122 @@ MainWindow::MainWindow(QWidget *parent)
     QWidget *central = new QWidget(this);
     setCentralWidget(central);
 
-    // --- Left side: Date/time + schedule ---
-    dateTimeLabel = new QLabel("Loading...", this);
-    dateTimeLabel->setStyleSheet("font-size: 18px; font-weight: bold;");
-
+    // --- Left side scene manager ---
+    leftStack = new QStackedWidget(this);
     scheduleView = new DayScheduleView(this);
+    leftNewEntryView = new NewEntryView(this);
+    leftEntryDetailsView = new EntryDetailsView(this);
 
-    QVBoxLayout *leftLayout = new QVBoxLayout;
-    leftLayout->addWidget(dateTimeLabel);
-    leftLayout->addWidget(scheduleView, 1); // stretch factor for resize handling
+    // Add schedule + detail/edit views to left stack
+    leftStack->addWidget(scheduleView);         // index 0
+    leftStack->addWidget(leftEntryDetailsView); // index 1
+    leftStack->addWidget(leftNewEntryView);     // index 2
 
-    // --- Right side: todo lists ---
-    // Container for all todo lists
-    todoContainer = new QWidget(this);
-    todoLayout = new QHBoxLayout(todoContainer);
-    todoLayout->setContentsMargins(0, 0, 0, 0);
-    todoLayout->setSpacing(10);
+    leftStack->setCurrentWidget(scheduleView);
 
-    // Create scroll area
-    QScrollArea *scrollArea = new QScrollArea(this);
-    scrollArea->setWidgetResizable(true);
-    scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    scrollArea->setWidget(todoContainer);
+    // --- Right side scene manager ---
+    rightStack = new QStackedWidget(this);
 
-    // Final placement beside the schedule
-    QHBoxLayout *rootLayout = new QHBoxLayout;
-    rootLayout->addLayout(leftLayout, 2);
-    rootLayout->addWidget(scrollArea, 3);
+    todoListView = new TodoListView(this);
+    newEntryView = new NewEntryView(this);
+    entryDetailsView = new EntryDetailsView(this);
 
-    central->setLayout(rootLayout);
+    // Add to stack
+    rightStack->addWidget(todoListView);     // index 0
+    rightStack->addWidget(entryDetailsView); // index 1
+    rightStack->addWidget(newEntryView);     // index 2
 
-    central->setLayout(rootLayout);
+    // Initialize the right panel to the todo list
+    rightStack->setCurrentWidget(todoListView);
 
-    // Timer updates the clock once a second
-    QTimer *timer = new QTimer(this);
-    connect(timer, &QTimer::timeout, this, &MainWindow::updateDateTime);
-    timer->start(1000);
+    // Layout: left scene stack on the left, scenes on the right
+    QHBoxLayout *root = new QHBoxLayout;
+    root->addWidget(leftStack, 2);
+    root->addWidget(rightStack, 3);
 
-    updateDateTime();
+    central->setLayout(root);
+
+    // --- Todo list task selection handling ---
+    connect(todoListView, &TodoListView::taskSelected, this, [this](Task *t)
+            {
+        // When a task is selected in the todo list, show its details on the right panel
+        QVariant v = QVariant::fromValue(static_cast<void*>(t));
+        switchLeftPanel(Scene::EntryDetails, v); });
+    connect(todoListView, &TodoListView::taskDeselected, this, [this]()
+            {
+        // When no task is selected, switch back to schedule view
+        switchLeftPanel(Scene::DaySchedule); });
 }
 
-void MainWindow::updateDateTime()
+void MainWindow::switchRightPanel(Scene scene, QVariant data)
 {
-    dateTimeLabel->setText(QDateTime::currentDateTime().toString("hh:mm:ss\ndddd, MMM d"));
-}
+    const char *TAG = "MainWindow::switchRightPanel";
 
-void MainWindow::updateTasklists(const std::vector<Timeblock> &timeblocks)
-{
-    // Remove old widgets from layout
-    // todo: Consider caching items to avoid constant redrawing
-    while (QLayoutItem *item = todoLayout->takeAt(0))
+    switch (scene)
     {
-        QWidget *w = item->widget();
-        if (w)
-            w->deleteLater();
-        delete item;
-    }
+    case Scene::TodoList:
+        rightStack->setCurrentWidget(todoListView);
+        currentRightScene = Scene::TodoList;
+        break;
 
-    todoLists.clear();
+    case Scene::NewEntry:
+        rightStack->setCurrentWidget(newEntryView);
+        currentRightScene = Scene::NewEntry;
+        break;
 
-    // Add lists to container instead of root directly
-    for (const auto &tb : timeblocks)
-    {
-
-        // --- Container for label + list ---
-        QWidget *column = new QWidget(this);
-        QVBoxLayout *colLayout = new QVBoxLayout(column);
-        colLayout->setContentsMargins(0, 0, 0, 0);
-        colLayout->setSpacing(4);
-
-        // --- Label at top ---
-        QLabel *title = new QLabel(QString(tb.name), this);
-        title->setAlignment(Qt::AlignHCenter);
-        title->setStyleSheet("font-weight: bold; font-size: 16px;");
-        colLayout->addWidget(title);
-
-        // --- Todo list ---
-        QListWidget *list = new QListWidget(this);
-
-        for (const auto &task : tb.tasks)
+    case Scene::EntryDetails:
+        if (data.canConvert<void *>())
         {
-            QListWidgetItem *item = new QListWidgetItem(list);
-            TaskItemWidget *widget = new TaskItemWidget(task);
-
-            item->setSizeHint(widget->sizeHint());
-            list->addItem(item);
-            list->setItemWidget(item, widget);
+            Task *t = static_cast<Task *>(data.value<void *>());
+            entryDetailsView->loadTask(t);
         }
-
-        colLayout->addWidget(list);
-
-        // Track list for your backend
-        todoLists.append(list);
-
-        // Add column to main horizontal layout
-        todoLayout->addWidget(column);
+        rightStack->setCurrentWidget(entryDetailsView);
+        currentRightScene = Scene::EntryDetails;
+        break;
     }
+
+    LOGI(TAG, "Switched right panel to scene %d", static_cast<int>(currentRightScene));
+}
+
+void MainWindow::switchLeftPanel(Scene scene, QVariant data)
+{
+    const char *TAG = "MainWindow::switchLeftPanel";
+
+    switch (scene)
+    {
+    case Scene::DaySchedule:
+        leftStack->setCurrentWidget(scheduleView);
+        currentLeftScene = Scene::DaySchedule;
+        break;
+
+    case Scene::NewEntry:
+        // If a Task pointer was supplied, load it into the details view
+        if (data.canConvert<void *>())
+        {
+            Task *t = static_cast<Task *>(data.value<void *>());
+            leftEntryDetailsView->loadTask(t);
+        }
+        // Show the details/edit view on the left (use EntryDetailsView to
+        // display task fields when switching from the todo list).
+        leftStack->setCurrentWidget(leftEntryDetailsView);
+        currentLeftScene = Scene::NewEntry;
+        break;
+
+    case Scene::EntryDetails:
+        if (data.canConvert<void *>())
+        {
+            Task *t = static_cast<Task *>(data.value<void *>());
+            leftEntryDetailsView->loadTask(t);
+        }
+        leftStack->setCurrentWidget(leftEntryDetailsView);
+        currentLeftScene = Scene::EntryDetails;
+        break;
+
+    default:
+        leftStack->setCurrentWidget(scheduleView);
+        currentLeftScene = Scene::DaySchedule;
+        break;
+    }
+
+    LOGI(TAG, "Switched left panel to scene %d", static_cast<int>(currentLeftScene));
 }

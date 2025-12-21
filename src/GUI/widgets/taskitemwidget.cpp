@@ -6,6 +6,8 @@
 TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
     : QWidget(parent)
 {
+    m_task = const_cast<Task *>(&t);
+
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
 
@@ -18,4 +20,9 @@ TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
     layout->addWidget(name);
     layout->addWidget(due);
     layout->addWidget(urgency);
+}
+
+Task *TaskItemWidget::task() const
+{
+    return m_task;
 }
