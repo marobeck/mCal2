@@ -33,5 +33,5 @@ DayScheduleView::DayScheduleView(QWidget *parent)
 
 void DayScheduleView::updateDateTime()
 {
-    dateTimeLabel->setText(QDateTime::currentDateTime().toString("hh:mm:ss\ndddd, MMM d"));
+    dateTimeLabel->setText(QDateTime::currentDateTime().toString("h:mm:ss ap\ndddd, MMM d"));
 }
