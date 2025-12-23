@@ -77,6 +77,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         // --- Todo list ---
         QListWidget *list = new QListWidget(this);
         list->setSelectionMode(QAbstractItemView::SingleSelection);
+        list->setMinimumWidth(200);
         connect(list, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
 
         for (const auto &task : tb.tasks)
@@ -111,6 +112,19 @@ void TodoListView::onListCurrentItemChanged(QListWidgetItem *current, QListWidge
     {
         emit taskDeselected();
         return;
+    }
+
+    // Deselect items in other lists to ensure only the newly-selected item
+    // appears selected. Block their signals while doing this to avoid
+    // recursive selection-change handling.
+    for (QListWidget *other : todoLists)
+    {
+        if (other == list)
+            continue;
+        other->blockSignals(true);
+        other->clearSelection();
+        other->setCurrentItem(nullptr);
+        other->blockSignals(false);
     }
 
     TaskItemWidget *w = qobject_cast<TaskItemWidget *>(list->itemWidget(current));
