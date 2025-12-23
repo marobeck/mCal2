@@ -49,11 +49,19 @@ public slots:
 public:
     // Scenes
     DayScheduleView *scheduleView;
+    
+    /** Left panel scenes
+     * - Schedule view
+     * - New entry view
+     * - Entry details view
+     */
     QStackedWidget *leftStack;
-    NewEntryView *leftNewEntryView;
-    EntryDetailsView *leftEntryDetailsView;
-    QStackedWidget *rightStack;
-    TodoListView *todoListView;
     NewEntryView *newEntryView;
     EntryDetailsView *entryDetailsView;
+
+    /** Right panel scenes
+     * - Timeblock todo list view
+     */
+    QStackedWidget *rightStack;
+    TodoListView *todoListView;
 };

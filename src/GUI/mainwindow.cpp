@@ -28,13 +28,13 @@ MainWindow::MainWindow(QWidget *parent)
     // --- Left side scene manager ---
     leftStack = new QStackedWidget(this);
     scheduleView = new DayScheduleView(this);
-    leftNewEntryView = new NewEntryView(this);
-    leftEntryDetailsView = new EntryDetailsView(this);
+    newEntryView = new NewEntryView(this);
+    entryDetailsView = new EntryDetailsView(this);
 
     // Add schedule + detail/edit views to left stack
-    leftStack->addWidget(scheduleView);         // index 0
-    leftStack->addWidget(leftEntryDetailsView); // index 1
-    leftStack->addWidget(leftNewEntryView);     // index 2
+    leftStack->addWidget(scheduleView);     // index 0
+    leftStack->addWidget(entryDetailsView); // index 1
+    leftStack->addWidget(newEntryView);     // index 2
 
     leftStack->setCurrentWidget(scheduleView);
 
@@ -42,13 +42,9 @@ MainWindow::MainWindow(QWidget *parent)
     rightStack = new QStackedWidget(this);
 
     todoListView = new TodoListView(this);
-    newEntryView = new NewEntryView(this);
-    entryDetailsView = new EntryDetailsView(this);
 
     // Add to stack
-    rightStack->addWidget(todoListView);     // index 0
-    rightStack->addWidget(entryDetailsView); // index 1
-    rightStack->addWidget(newEntryView);     // index 2
+    rightStack->addWidget(todoListView); // index 0
 
     // Initialize the right panel to the todo list
     rightStack->setCurrentWidget(todoListView);
@@ -82,21 +78,6 @@ void MainWindow::switchRightPanel(Scene scene, QVariant data)
         rightStack->setCurrentWidget(todoListView);
         currentRightScene = Scene::TodoList;
         break;
-
-    case Scene::NewEntry:
-        rightStack->setCurrentWidget(newEntryView);
-        currentRightScene = Scene::NewEntry;
-        break;
-
-    case Scene::EntryDetails:
-        if (data.canConvert<void *>())
-        {
-            Task *t = static_cast<Task *>(data.value<void *>());
-            entryDetailsView->loadTask(t);
-        }
-        rightStack->setCurrentWidget(entryDetailsView);
-        currentRightScene = Scene::EntryDetails;
-        break;
     }
 
     LOGI(TAG, "Switched right panel to scene %d", static_cast<int>(currentRightScene));
@@ -118,11 +99,11 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         if (data.canConvert<void *>())
         {
             Task *t = static_cast<Task *>(data.value<void *>());
-            leftEntryDetailsView->loadTask(t);
+            entryDetailsView->loadTask(t);
         }
         // Show the details/edit view on the left (use EntryDetailsView to
         // display task fields when switching from the todo list).
-        leftStack->setCurrentWidget(leftEntryDetailsView);
+        leftStack->setCurrentWidget(entryDetailsView);
         currentLeftScene = Scene::NewEntry;
         break;
 
@@ -130,9 +111,9 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         if (data.canConvert<void *>())
         {
             Task *t = static_cast<Task *>(data.value<void *>());
-            leftEntryDetailsView->loadTask(t);
+            entryDetailsView->loadTask(t);
         }
-        leftStack->setCurrentWidget(leftEntryDetailsView);
+        leftStack->setCurrentWidget(entryDetailsView);
         currentLeftScene = Scene::EntryDetails;
         break;
 
