@@ -16,6 +16,7 @@ private:
     QLabel *m_nameLabel = nullptr;
     QLabel *m_descLabel = nullptr;
     QLabel *m_dueLabel = nullptr;
+    QLabel *m_priorityLabel = nullptr;
     QLabel *m_urgencyLabel = nullptr;
     QLabel *m_prereqLabel = nullptr;
 };

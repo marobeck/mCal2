@@ -150,9 +150,56 @@ std::string Task::due_date_string() const
 
     // Return full time string
     // TODO: String should be modified based on time left (i.e. year should be excluded if it's the same year as is due)
+    if (!tm_ptr)
+    {
+        return "Invalid date";
+    }
+
     std::ostringstream oss;
-    oss << std::put_time(tm_ptr, "%Y-%m-%d %I:%M:%S %p");
+    oss << std::put_time(tm_ptr, "%Y-%m-%d %I:%M %p");
     return oss.str(); // Return by value
+}
+
+std::string Task::priority_string() const
+{
+    switch (priority)
+    {
+    case Priority::NONE:
+        return "None";
+    case Priority::VERY_LOW:
+        return "Very Low";
+    case Priority::LOW:
+        return "Low";
+    case Priority::MEDIUM:
+        return "Medium";
+    case Priority::HIGH:
+        return "High";
+    case Priority::VERY_HIGH:
+        return "Very High";
+    default:
+        return "Unknown";
+    }
+}
+
+char Task::priority_char() const
+{
+    switch (priority)
+    {
+    case Priority::NONE:
+        return 'N';
+    case Priority::VERY_LOW:
+        return 'V';
+    case Priority::LOW:
+        return 'L';
+    case Priority::MEDIUM:
+        return 'M';
+    case Priority::HIGH:
+        return 'H';
+    case Priority::VERY_HIGH:
+        return 'X';
+    default:
+        return '?';
+    }
 }
 
 /* ------------------------ Get the urgency of a task ----------------------- */

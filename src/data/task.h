@@ -6,13 +6,6 @@
 
 #include "defs.h"
 
-typedef enum
-{
-    INCOMPLETE,
-    IN_PROGRESS,
-    COMPLETE
-} TASK_STATUS;
-
 enum class Priority
 {
     NONE = -1,
@@ -22,6 +15,13 @@ enum class Priority
     HIGH = 5,
     VERY_HIGH = 7
 };
+
+typedef enum
+{
+    INCOMPLETE,
+    IN_PROGRESS,
+    COMPLETE
+} TASK_STATUS;
 
 /** Task Struct
  * UUID string used for id to match with JSON format.
@@ -49,6 +49,7 @@ private:
     time_t completed_days[10]; // last 10 timestamps of days where task was complete
 
 public:
+    // --- Descriptive fields ---
     char *name = NULL;   // Title of entry
     char *desc = NULL;   // Verbose description of entry
     Task *prereq = NULL; // Task that must be completed prior to completing this one.
@@ -75,6 +76,12 @@ public:
      * Provide due date as a string
      */
     std::string due_date_string() const;
+
+    /**
+     * Get priority as string
+     */
+    std::string priority_string() const;
+    char priority_char() const;
 
     // --- Upkeep ---
     /**

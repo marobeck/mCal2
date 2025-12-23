@@ -1,5 +1,7 @@
 #include "entrydetailsview.h"
 
+#include "log.h"
+
 #include <QVBoxLayout>
 #include <QString>
 
@@ -7,7 +9,7 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     : QWidget(parent)
 {
     QVBoxLayout *layout = new QVBoxLayout(this);
-    layout->setContentsMargins(8, 8, 8, 8);
+    layout->setContentsMargins(8, 4, 8, 4);
     layout->setSpacing(6);
 
     m_nameLabel = new QLabel("", this);
@@ -16,6 +18,9 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
 
     m_dueLabel = new QLabel("", this);
     layout->addWidget(m_dueLabel);
+
+    m_priorityLabel = new QLabel("", this);
+    layout->addWidget(m_priorityLabel);
 
     m_urgencyLabel = new QLabel("", this);
     layout->addWidget(m_urgencyLabel);
@@ -26,15 +31,23 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     m_descLabel = new QLabel("", this);
     m_descLabel->setWordWrap(true);
     layout->addWidget(m_descLabel);
+
+    // Force everything to the top
+    layout->addStretch();
 }
 
 void EntryDetailsView::loadTask(Task *task)
 {
+    const char *TAG = "EntryDetailsView::loadTask";
+
+    LOGI(TAG, "Loading task details view for task \"%s\" (%p)", task->name, task);
+
     if (!task)
     {
         m_nameLabel->setText("");
         m_descLabel->setText("");
         m_dueLabel->setText("");
+        m_priorityLabel->setText("");
         m_urgencyLabel->setText("");
         m_prereqLabel->setText("");
         return;
@@ -49,19 +62,37 @@ void EntryDetailsView::loadTask(Task *task)
     m_descLabel->setText(desc);
 
     // Due date string via Task API
-    try {
+    try
+    {
         std::string due = task->due_date_string();
         m_dueLabel->setText(QString::fromStdString("Due: " + due));
-    } catch (...) {
-        m_dueLabel->setText("Due: (unknown)");
+    }
+    catch (...)
+    {
+        m_dueLabel->setText("Due: (n/a)");
+    }
+
+    // Priority
+    std::string priorityStr;
+    try
+    {
+        priorityStr = task->priority_string();
+        m_priorityLabel->setText(QString::fromStdString("Priority: " + priorityStr));
+    }
+    catch (...)
+    {
+        m_priorityLabel->setText("Priority: (n/a)");
     }
 
     // Urgency via Task API
     float urg = 0.0f;
-    try {
+    try
+    {
         urg = task->get_urgency();
         m_urgencyLabel->setText(QString::fromStdString("Urgency: " + std::to_string(urg)));
-    } catch (...) {
+    }
+    catch (...)
+    {
         m_urgencyLabel->setText("Urgency: (n/a)");
     }
 
