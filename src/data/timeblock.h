@@ -7,6 +7,24 @@
 #include "task.h"
 #include "habit.h"
 
+typedef enum
+{
+    /**
+     * Timeblock is in use
+     */
+    ONGOING,
+    /**
+     * Timeblock was manually stopped before completion
+     * Timeblock remains in active list but has urgancy of 0
+     */
+    STOPPED,
+    /**
+     * Timeblock completed as scheduled
+     * Timeblock is moved to archive upon completion
+     */
+    DONE
+} TIMEBLOCK_STATUS;
+
 class Timeblock
 {
 private:
@@ -22,6 +40,7 @@ private:
 public:
     char *name, *desc;
     std::vector<Task> tasks;
+    TIMEBLOCK_STATUS status = ONGOING;
 
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);
 
