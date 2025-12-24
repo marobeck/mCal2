@@ -5,6 +5,7 @@
 #include <sqlite3.h>
 
 #include "defs.h"
+#include "goalspec.h"
 
 enum class Priority
 {
@@ -16,19 +17,20 @@ enum class Priority
     VERY_HIGH = 7
 };
 
-typedef enum
+enum class TaskStatus
 {
-    INCOMPLETE,
-    IN_PROGRESS,
-    COMPLETE
-} TASK_STATUS;
+    INCOMPLETE = 0,
+    IN_PROGRESS = 2,
+    COMPLETE = 1,
+    HABIT = 3
+};
 
 /** Task Struct
  * UUID string used for id to match with JSON format.
  */
 class Task
 {
-private:
+public:
     // --- Location ---
     // Used for database fetching
     char uuid[UUID_LEN]; // UUID string of entry
@@ -36,35 +38,24 @@ private:
 
     // --- Task Urgency ---
 
-    time_t due_date = 0;                // Due date, 0 = undated
-    Priority priority = Priority::NONE; // Priority
-    TASK_STATUS status = INCOMPLETE;    // Completion status of the entry
+    time_t due_date = 0;                        // Due date, 0 = undated
+    Priority priority = Priority::NONE;         // Priority
+    TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
 
     // --- Habit parameters ---
 
-    /// 0 if not a habit, -1 for weekday based frequency, otherwise this indicates the number of
-    /// times this habit should be done per week
-    char frequency = 0;
-    unsigned char day_frequency = 0;
-    time_t completed_days[10]; // last 10 timestamps of days where task was complete
+    GoalSpec goal_spec;        // Goal specification for habit tasks
+    time_t completed_days[10]; // cache of the last 10 timestamps of days where task was complete
 
-public:
     // --- Descriptive fields ---
     char *name = NULL;   // Title of entry
     char *desc = NULL;   // Verbose description of entry
     Task *prereq = NULL; // Task that must be completed prior to completing this one.
 
     // --- Constructors ---
-    /**
-     * Creates empty task
-     * ! Don't use in production, will leave null pointers
-     */
-    Task();
 
-    /**
-     * Creates task
-     */
-    Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, char frequency_ = 0, unsigned char day_frequency_ = 0);
+    Task() = default;
+    Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, char frequency_ = 0);
 
     // --- Get parameters ---
     /**

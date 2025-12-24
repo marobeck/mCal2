@@ -15,7 +15,7 @@ Timeblock::Timeblock(const char *name_, const char *desc_, uint8_t day_flags,
     // generate_uuid(tb.uuid);
     name = strdup(name_);
     desc = strdup(desc_);
-    day_frequency = day_flags;
+    day_frequency = GoalSpec::day_frequency(day_flags);
     duration = duration;
 
     if (day_flags == 0)
@@ -38,7 +38,7 @@ bool Timeblock::timeblock_is_active(time_t now)
     struct tm now_tm;
     localtime_r(&now, &now_tm);
 
-    if (day_frequency == 0)
+    if (day_frequency.is_empty())
     {
         // Single event
         return (now >= start) && (now <= start + duration);
@@ -47,10 +47,9 @@ bool Timeblock::timeblock_is_active(time_t now)
     {
         // Weekly recurring
         int weekday = now_tm.tm_wday;          // Sunday = 0, Saturday = 6
-        int weekday_flag = 1 << (6 - weekday); // Map weekday to flag mask
 
         // Test if it is the correct day
-        if (!(day_frequency & weekday_flag))
+        if (!day_frequency.has_day(weekday))
             return false;
 
         // Time since start of current day

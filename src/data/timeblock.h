@@ -4,8 +4,8 @@
 #include <vector>
 #include <stdint.h>
 
+#include "goalspec.h"
 #include "task.h"
-#include "habit.h"
 
 typedef enum
 {
@@ -27,21 +27,23 @@ typedef enum
 
 class Timeblock
 {
-private:
+public:
+    // --- Location ---
+    // Used for database fetching
     char uuid[UUID_LEN];
 
     // --- Event functionality ---
 
-    int day_frequency; // Flag indicating which day of the week the timeblock is repeated on; 0 for single event
-    time_t duration;   // Length of timeblock
-    time_t start;      // For single events; Time since epoch
-    time_t day_start;  // For weekly events; Time since start of day
+    GoalSpec day_frequency; // Days of the week this timeblock occurs on; 0 = single event
+    time_t duration;        // Length of timeblock
+    time_t start;           // For single events; Time since epoch
+    time_t day_start;       // For weekly events; Time since start of day
 
-public:
     char *name, *desc;
     std::vector<Task> tasks;
     TIMEBLOCK_STATUS status = ONGOING;
 
+    Timeblock() = default;
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);
 
     // --- Add data ---

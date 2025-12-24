@@ -9,23 +9,7 @@
 /*                                Constructors                                */
 /* -------------------------------------------------------------------------- */
 
-Task::Task()
-{
-    name = strdup("");
-    desc = strdup("");
-
-    std::memset(uuid, 0, sizeof(uuid));
-    std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
-    std::memset(completed_days, 0, sizeof(completed_days));
-
-    due_date = 0;
-    priority = Priority::NONE;
-    status = INCOMPLETE;
-    frequency = 0;
-    day_frequency = 0;
-}
-
-Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, char frequency_, unsigned char day_frequency_)
+Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, char frequency_)
 {
     name = strdup(name_);
     desc = strdup(desc_);
@@ -36,9 +20,8 @@ Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_
 
     due_date = due_date_;
     priority = priority_;
-    status = INCOMPLETE;
-    frequency = frequency_;
-    day_frequency = day_frequency_;
+    status = TaskStatus::INCOMPLETE;
+    goal_spec = GoalSpec::frequency(frequency_);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -58,7 +41,7 @@ static inline time_t midnight(time_t t)
 void Task::update_due_date()
 {
     // --- TASK MODE (non-repeating) ---
-    if (frequency == 0)
+    if (status != TaskStatus::HABIT)
     {
         return;
     }
@@ -98,13 +81,18 @@ void Task::update_due_date()
         break;
     }
 
-    // --- HABIT: weekday-based (-1) ---
-    if (frequency == -1)
+    // --- HABIT: weekday-based ---
+    if (goal_spec.mode() == GoalSpec::Mode::DayFrequency)
     {
+        uint8_t day_frequency = goal_spec.weekday_flags();
         if (day_frequency & day_flag)
+        {
             due_date = today_midnight; // should be done today
+        }
         else
+        {
             due_date = 0; // not today
+        }
         return;
     }
 
@@ -123,7 +111,7 @@ void Task::update_due_date()
             completed_this_week++;
     }
 
-    if (completed_this_week < frequency)
+    if (completed_this_week < goal_spec.frequency())
     {
         due_date = today_midnight; // should be done tonight
     }
@@ -207,16 +195,16 @@ char Task::priority_char() const
 /**
  * Get weight multiplier for status
  */
-inline float status_weight(TASK_STATUS s)
+inline float status_weight(TaskStatus s)
 {
     // Prioritize creating new tasks over completing existing ones
     switch (s)
     {
-    case INCOMPLETE:
+    case TaskStatus::INCOMPLETE:
         return 1.0f;
-    case IN_PROGRESS:
-        return 0.7f;
-    case COMPLETE:
+    case TaskStatus::IN_PROGRESS:
+        return 0.8f;
+    case TaskStatus::COMPLETE:
         return 0.0f;
     }
     return 0.0f;
