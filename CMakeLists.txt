@@ -23,4 +23,4 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets SQLite::SQLite3 uuid)
 
 # Link headers
-target_include_directories(${PROJECT_NAME} PRIVATE src src/data src/database src/GUI src/GUI/widgets)
+target_include_directories(${PROJECT_NAME} PRIVATE src src/data src/database src/GUI src/GUI/widgets src/database)

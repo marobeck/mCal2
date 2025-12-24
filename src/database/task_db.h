@@ -1,4 +1,4 @@
-#include "task.hpp"
+#include "task.h"
 #include <sqlite3.h>
 
 // Append a new task to the database
@@ -18,7 +18,7 @@ int task_retrieve_page_db(sqlite3 *db, Task *tb_page, unsigned int count, unsign
 /// @param uuid Task's unique ID
 /// @param new_status New status. If this is MFD the object is deleted
 /// @returns Error Code
-int task_update_status_db(sqlite3 *db, const char *uuid, TASK_STATUS new_status);
+int task_update_status_db(sqlite3 *db, const char *uuid, TaskStatus new_status);
 
 // Delete a timeblock
 int task_delete_db(sqlite3 *db, const char *UUID);

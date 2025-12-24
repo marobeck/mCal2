@@ -1,8 +1,10 @@
-#ifndef DATABASE_H
-#define DATABASE_H
+#pragma once
 
 #include <sqlite3.h>
-#include "../defs.h"
+#include <vector>
+#include <uuid/uuid.h>
+
+#include "defs.h"
 
 #include "timeblock.h"
 #include "task.h"
@@ -15,22 +17,28 @@ void generate_uuid(char *uuid_buf)
     uuid_unparse_lower(binuuid, uuid_buf);
 }
 
-int init_db(sqlite3 **db);
+class Database
+{
+private:
+    sqlite3 *db = nullptr;
 
-// --------------------------------------- Timeblock Data -----------------------------------------
-int db_insert_timeblock(sqlite3 *db, const timeblock_t *tb);
-int db_load_timeblocks(sqlite3 *db, timeblock_t **timeblocks, int *count);
-int db_delete_timeblock(sqlite3 *db, const char *uuid);
+public:
+    // -------------------------------------- Initialization ----------------------------------------
+    void init_db();
 
-// ----------------------------------------- Task Data --------------------------------------------
-int db_insert_task(sqlite3 *db, const Task *task);
-int db_load_tasks(sqlite3 *db, const char *timeblock_uuid, task_t **tasks, int *count);
-int db_update_task_status(sqlite3 *db, const char *uuid, TASK_STATUS new_status);
-int db_delete_task(sqlite3 *db, const char *uuid);
+    // --------------------------------------- Timeblock Data -----------------------------------------
+    void db_insert_timeblock(const Timeblock &tb);
+    void db_load_timeblocks(std::vector<Timeblock> &timeblocks);
+    void db_delete_timeblock(const char *uuid);
 
-// -------------------------------------- Habit Entry Data ----------------------------------------
-int db_add_habit_entry(sqlite3 *db, const char *task_uuid, const char *date_iso8601);
-int db_habit_entry_exists(sqlite3 *db, const char *task_uuid, const char *date_iso8601, int *exists);
-int db_remove_habit_entry(sqlite3 *db, const char *task_uuid, const char *date_iso8601);
+    // ----------------------------------------- Task Data --------------------------------------------
+    void db_insert_task(const Task &task);
+    void db_load_tasks(Timeblock *timeblock);
+    void db_update_task_status(const char *uuid, TaskStatus new_status);
+    void db_delete_task(const char *uuid);
 
-#endif
+    // -------------------------------------- Habit Entry Data ----------------------------------------
+    void db_add_habit_entry(const char *task_uuid, const char *date_iso8601);
+    void db_remove_habit_entry(const char *task_uuid, const char *date_iso8601);
+    bool db_habit_entry_exists(const char *task_uuid, const char *date_iso8601);
+};
