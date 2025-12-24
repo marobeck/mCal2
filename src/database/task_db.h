@@ -1,3 +1,5 @@
+#pragma once
+
 #include "task.h"
 #include <sqlite3.h>
 
