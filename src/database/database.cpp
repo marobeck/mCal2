@@ -4,7 +4,17 @@
 #include "database.h"
 #include "log.h"
 
-void Database::init_db()
+#include <uuid/uuid.h>
+
+// Utility: Generate UUID string
+void generate_uuid(char *uuid_buf)
+{
+    uuid_t binuuid;
+    uuid_generate_random(binuuid);
+    uuid_unparse_lower(binuuid, uuid_buf);
+}
+
+Database::Database()
 {
     const char *TAG = "DB::init_db";
 
@@ -61,13 +71,22 @@ void Database::init_db()
     LOGI(TAG, "Database initialized successfully");
 }
 
+Database::~Database()
+{
+    if (db)
+    {
+        sqlite3_close(db);
+        db = nullptr;
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                               Timeblock data                               */
 /* -------------------------------------------------------------------------- */
 
-void Database::db_insert_timeblock(const Timeblock &tb)
+void Database::insert_timeblock(const Timeblock &tb)
 {
-    const char *TAG = "DB::db_insert_timeblock";
+    const char *TAG = "DB::insert_timeblock";
 
     /**
      * Timeblock fields:
@@ -101,7 +120,7 @@ void Database::db_insert_timeblock(const Timeblock &tb)
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
-    if (rc == SQLITE_OK)
+    if (rc == SQLITE_DONE)
     {
         LOGI(TAG, "Saved timeblock <%s> to database", tb.name);
         return;
@@ -111,9 +130,9 @@ void Database::db_insert_timeblock(const Timeblock &tb)
     throw sqlite3_errcode(db);
 }
 
-void Database::db_load_timeblocks(std::vector<Timeblock> &timeblocks)
+void Database::load_timeblocks(std::vector<Timeblock> &timeblocks)
 {
-    const char *TAG = "DB::db_load_timeblocks";
+    const char *TAG = "DB::load_timeblocks";
 
     const char *sql = "SELECT * FROM timeblocks;";
     sqlite3_stmt *stmt;
@@ -129,8 +148,8 @@ void Database::db_load_timeblocks(std::vector<Timeblock> &timeblocks)
         Timeblock tb;
         strncpy(tb.uuid, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
         tb.status = static_cast<TIMEBLOCK_STATUS>(sqlite3_column_int(stmt, 1));
-        strncpy(tb.name, (const char *)sqlite3_column_text(stmt, 2), NAME_LEN);
-        strncpy(tb.desc, (const char *)sqlite3_column_text(stmt, 3), DESC_LEN);
+        tb.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        tb.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
         tb.day_frequency = GoalSpec::from_sql(sqlite3_column_int(stmt, 4));
         tb.duration = sqlite3_column_int64(stmt, 5);
         tb.start = sqlite3_column_int64(stmt, 6);
@@ -143,9 +162,9 @@ void Database::db_load_timeblocks(std::vector<Timeblock> &timeblocks)
     LOGI(TAG, "Loaded %zu timeblocks from database", timeblocks.size());
 }
 
-void Database::db_delete_timeblock(const char *uuid)
+void Database::delete_timeblock(const char *uuid)
 {
-    const char *TAG = "DB::db_delete_timeblock";
+    const char *TAG = "DB::delete_timeblock";
 
     const char *sql = "DELETE FROM timeblocks WHERE uuid = ?;";
     sqlite3_stmt *stmt;
@@ -172,9 +191,9 @@ void Database::db_delete_timeblock(const char *uuid)
 /*                                  Task data                                 */
 /* -------------------------------------------------------------------------- */
 
-void Database::db_insert_task(const Task &task)
+void Database::insert_task(const Task &task)
 {
-    const char *TAG = "DB::db_insert_task";
+    const char *TAG = "DB::insert_task";
 
     /**
      * Task fields:
@@ -218,9 +237,9 @@ void Database::db_insert_task(const Task &task)
     throw sqlite3_errcode(db);
 }
 
-void Database::db_load_tasks(Timeblock *timeblock)
+void Database::load_tasks(Timeblock *timeblock)
 {
-    const char *TAG = "DB::db_load_tasks";
+    const char *TAG = "DB::load_tasks";
 
     const char *sql = "SELECT * FROM tasks WHERE timeblock_uuid = ?;";
     sqlite3_stmt *stmt;
@@ -238,21 +257,25 @@ void Database::db_load_tasks(Timeblock *timeblock)
         Task t;
         strncpy(t.uuid, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
         strncpy(t.timeblock_uuid, (const char *)sqlite3_column_text(stmt, 1), UUID_LEN);
-        strncpy(t.name, (const char *)sqlite3_column_text(stmt, 2), NAME_LEN);
-        strncpy(t.desc, (const char *)sqlite3_column_text(stmt, 3), DESC_LEN);
+        t.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        t.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
         t.due_date = sqlite3_column_int64(stmt, 4);
         t.priority = static_cast<Priority>(sqlite3_column_int(stmt, 5));
         t.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 6));
         t.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 7));
+
+        timeblock->append(t);
     }
 
     sqlite3_finalize(stmt);
+
+    LOGI(TAG, "Loaded %zu tasks for timeblock <%s>", timeblock->tasks.size(), timeblock->name);
     return;
 }
 
-void Database::db_update_task_status(const char *uuid, TaskStatus new_status)
+void Database::update_task_status(const char *uuid, TaskStatus new_status)
 {
-    const char *TAG = "DB::db_update_task_status";
+    const char *TAG = "DB::update_task_status";
 
     int status_int = static_cast<int>(new_status);
 
@@ -280,9 +303,9 @@ void Database::db_update_task_status(const char *uuid, TaskStatus new_status)
     throw sqlite3_errcode(db);
 }
 
-void Database::db_delete_task(const char *uuid)
+void Database::delete_task(const char *uuid)
 {
-    const char *TAG = "DB::db_delete_task";
+    const char *TAG = "DB::delete_task";
 
     const char *sql = "DELETE FROM tasks WHERE uuid = ?;";
     sqlite3_stmt *stmt;
@@ -309,9 +332,9 @@ void Database::db_delete_task(const char *uuid)
 /*                              Habit entry data                              */
 /* -------------------------------------------------------------------------- */
 
-void Database::db_add_habit_entry(const char *task_uuid, const char *date_iso8601)
+void Database::add_habit_entry(const char *task_uuid, const char *date_iso8601)
 {
-    const char *TAG = "DB::db_add_habit_entry";
+    const char *TAG = "DB::add_habit_entry";
 
     const char *sql = "INSERT OR IGNORE INTO habit_entries (task_uuid, date) VALUES (?, ?);";
     sqlite3_stmt *stmt;
@@ -336,9 +359,9 @@ void Database::db_add_habit_entry(const char *task_uuid, const char *date_iso860
     throw sqlite3_errcode(db);
 }
 
-void Database::db_remove_habit_entry(const char *task_uuid, const char *date_iso8601)
+void Database::remove_habit_entry(const char *task_uuid, const char *date_iso8601)
 {
-    const char *TAG = "DB::db_remove_habit_entry";
+    const char *TAG = "DB::remove_habit_entry";
 
     const char *sql = "DELETE FROM habit_entries WHERE task_uuid = ? AND date = ?;";
     sqlite3_stmt *stmt;
@@ -364,7 +387,7 @@ void Database::db_remove_habit_entry(const char *task_uuid, const char *date_iso
     throw sqlite3_errcode(db);
 }
 
-bool Database::db_habit_entry_exists(const char *task_uuid, const char *date_iso8601)
+bool Database::habit_entry_exists(const char *task_uuid, const char *date_iso8601)
 {
     const char *sql = "SELECT 1 FROM habit_entries WHERE task_uuid = ? AND date = ?;";
     sqlite3_stmt *stmt;
