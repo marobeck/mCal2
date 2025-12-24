@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+#include "database.h"
 #include "timeblock.h"
-#include "../log.h"
-#include "uuid/uuid.h"
+#include "log.h"
 
 #define SECONDS_IN_DAY 86400
 
@@ -12,7 +13,7 @@
 Timeblock::Timeblock(const char *name_, const char *desc_, uint8_t day_flags,
                      time_t duration, time_t start_or_day_start)
 {
-    // generate_uuid(tb.uuid);
+    generate_uuid(uuid);
     name = strdup(name_);
     desc = strdup(desc_);
     day_frequency = GoalSpec::day_frequency(day_flags);
@@ -46,7 +47,7 @@ bool Timeblock::timeblock_is_active(time_t now)
     else
     {
         // Weekly recurring
-        int weekday = now_tm.tm_wday;          // Sunday = 0, Saturday = 6
+        int weekday = now_tm.tm_wday; // Sunday = 0, Saturday = 6
 
         // Test if it is the correct day
         if (!day_frequency.has_day(weekday))

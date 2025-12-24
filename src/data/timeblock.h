@@ -47,12 +47,17 @@ public:
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);
 
     // --- Add data ---
+
     void append(Task &e)
     {
+        // Notify task of its parent timeblock
+        e.set_timeblock_uuid(uuid);
+        
         tasks.push_back(e);
     }
 
     // --- Get data ---
+
     /**
      * @brief Determines if a timeblock is applicable to a given time
      * @param time Time since epoch to test

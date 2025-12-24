@@ -1,27 +1,30 @@
-#include "task.h"
-
 #include <cmath>
 #include <cstring>
 #include <sstream>
 #include <iomanip>
 
+#include "log.h"
+#include "database.h"
+#include "task.h"
+
 /* -------------------------------------------------------------------------- */
 /*                                Constructors                                */
 /* -------------------------------------------------------------------------- */
 
-Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, char frequency_)
+Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, uint8_t frequency_)
 {
+    generate_uuid(uuid);
     name = strdup(name_);
     desc = strdup(desc_);
 
-    std::memset(uuid, 0, sizeof(uuid));
     std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
     std::memset(completed_days, 0, sizeof(completed_days));
 
     due_date = due_date_;
     priority = priority_;
     status = TaskStatus::INCOMPLETE;
-    goal_spec = GoalSpec::frequency(frequency_);
+    goal_spec = GoalSpec::from_sql(frequency_);
+    LOGI("Task::Constructor", "Created task <%s> with frequency %d", name, frequency_);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -188,6 +191,15 @@ char Task::priority_char() const
     default:
         return '?';
     }
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   Setters                                  */
+/* -------------------------------------------------------------------------- */
+
+void Task::set_timeblock_uuid(const char *tb_uuid)
+{
+    std::strncpy(timeblock_uuid, tb_uuid, UUID_LEN);
 }
 
 /* ------------------------ Get the urgency of a task ----------------------- */

@@ -55,9 +55,14 @@ public:
     // --- Constructors ---
 
     Task() = default;
-    Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, char frequency_ = 0);
+    Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, uint8_t frequency_ = 0);
+
+    // --- Setters ---
+
+    void set_timeblock_uuid(const char *tb_uuid);
 
     // --- Get parameters ---
+
     /**
      * Get urgency of a task
      */
@@ -75,6 +80,7 @@ public:
     char priority_char() const;
 
     // --- Upkeep ---
+
     /**
      * Updates the due date of a if a task is repeating, otherwise does nothing
      */
