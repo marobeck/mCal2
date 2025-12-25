@@ -15,15 +15,35 @@
 #include <QSplitter>
 #include <QScrollArea>
 #include <QStackedWidget>
+#include <QPushButton>
+#include <QIcon>
+#include <QSize>
+#include <QSpacerItem>
 
 // Widgets
 #include "taskitemwidget.h"
+
+/* -------------------------------------------------------------------------- */
+/*                                     GUI                                    */
+/* -------------------------------------------------------------------------- */
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     QWidget *central = new QWidget(this);
     setCentralWidget(central);
+    // --- Left / Right thin edge panels (icon buttons) ---
+    leftEdgePanel = new QWidget(this);
+    leftEdgePanel->setFixedWidth(42);
+    leftEdgeLayout = new QVBoxLayout(leftEdgePanel);
+    leftEdgeLayout->setContentsMargins(4, 4, 4, 4);
+    leftEdgeLayout->setSpacing(6);
+
+    rightEdgePanel = new QWidget(this);
+    rightEdgePanel->setFixedWidth(42);
+    rightEdgeLayout = new QVBoxLayout(rightEdgePanel);
+    rightEdgeLayout->setContentsMargins(4, 4, 4, 4);
+    rightEdgeLayout->setSpacing(6);
 
     // --- Left side scene manager ---
     leftStack = new QStackedWidget(this);
@@ -49,12 +69,24 @@ MainWindow::MainWindow(QWidget *parent)
     // Initialize the right panel to the todo list
     rightStack->setCurrentWidget(todoListView);
 
-    // Layout: left scene stack on the left, scenes on the right
+    // Layout: thin left edge panel, left scene stack, right scene stack, thin right edge
     QHBoxLayout *root = new QHBoxLayout;
+    root->addWidget(leftEdgePanel, 0);
     root->addWidget(leftStack, 2);
     root->addWidget(rightStack, 3);
+    root->addWidget(rightEdgePanel, 0);
 
     central->setLayout(root);
+
+    // --- Edge icons ---
+    addLeftEdgeButton(QIcon("../icons/schedule.png"), Scene::DaySchedule);
+    addLeftEdgeButton(QIcon("../icons/new_entry.png"), Scene::NewEntry);
+
+    addRightEdgeButton(QIcon("../icons/todo_list.png"), Scene::TodoList);
+
+    // Force everything to the top
+    leftEdgeLayout->addStretch();
+    rightEdgeLayout->addStretch();
 
     // --- Todo list task selection handling ---
     connect(todoListView, &TodoListView::taskSelected, this, [this](Task *t)
@@ -66,6 +98,35 @@ MainWindow::MainWindow(QWidget *parent)
             {
         // When no task is selected, switch back to schedule view
         switchLeftPanel(Scene::DaySchedule); });
+
+    // --- New entry handling ---
+    connect(newEntryView, &NewEntryView::taskCreated, this, &MainWindow::onTaskCreated);
+}
+
+void MainWindow::addLeftEdgeButton(const QIcon &icon, Scene scene, QVariant data)
+{
+    QPushButton *btn = new QPushButton(leftEdgePanel);
+    btn->setIcon(icon);
+    btn->setIconSize(QSize(24, 24));
+    btn->setFlat(true);
+    btn->setFixedSize(36, 36);
+    leftEdgeLayout->addWidget(btn);
+    // connect click to switchLeftPanel
+    connect(btn, &QPushButton::clicked, this, [this, scene, data]()
+            { switchLeftPanel(scene, data); });
+}
+
+void MainWindow::addRightEdgeButton(const QIcon &icon, Scene scene, QVariant data)
+{
+    QPushButton *btn = new QPushButton(rightEdgePanel);
+    btn->setIcon(icon);
+    btn->setIconSize(QSize(24, 24));
+    btn->setFlat(true);
+    btn->setFixedSize(36, 36);
+    rightEdgeLayout->addWidget(btn);
+    // connect click to switchRightPanel
+    connect(btn, &QPushButton::clicked, this, [this, scene, data]()
+            { switchRightPanel(scene, data); });
 }
 
 void MainWindow::switchRightPanel(Scene scene, QVariant data)
@@ -99,11 +160,11 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         if (data.canConvert<void *>())
         {
             Task *t = static_cast<Task *>(data.value<void *>());
-            entryDetailsView->loadTask(t);
+            newEntryView->populateTimeblocks(timeblocks);
         }
         // Show the details/edit view on the left (use EntryDetailsView to
         // display task fields when switching from the todo list).
-        leftStack->setCurrentWidget(entryDetailsView);
+        leftStack->setCurrentWidget(newEntryView);
         currentLeftScene = Scene::NewEntry;
         break;
 
@@ -124,4 +185,52 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
     }
 
     LOGI(TAG, "Switched left panel to scene %d", static_cast<int>(currentLeftScene));
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                   Runtime                                  */
+/* -------------------------------------------------------------------------- */
+
+void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
+{
+    const char *TAG = "MainWindow::onTaskCreated";
+
+    LOGI(TAG, "Task <%s> created for timeblock index %d", task->name, timeblockIndex);
+
+    // Sanity check index
+    if (timeblockIndex < 0 || static_cast<size_t>(timeblockIndex) >= timeblocks.size())
+    {
+        LOGE(TAG, "Invalid timeblock index %d", timeblockIndex);
+        delete task; // avoid leak
+        return;
+    }
+
+    // Ensure task has an id and timeblock_uuid set
+    if (task->uuid[0] == '\0')
+    {
+        generate_uuid(task->uuid);
+    }
+    // copy the timeblock's uuid into the task
+    strncpy(task->timeblock_uuid, timeblocks[timeblockIndex].uuid, UUID_LEN);
+
+    // Append to the in-memory model. Timeblock::append copies the Task.
+    timeblocks[timeblockIndex].append(*task);
+
+    // Persist to DB (Database::insert_task expects a reference)
+    try
+    {
+        db.insert_task(*task);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "DB insert failed: %d", err);
+        // handle rollback or show error UI as needed
+    }
+
+    // Refresh the TodoListView with the new model snapshot
+    // TodoListView::updateTasklists expects std::vector<Timeblock>
+    todoListView->updateTasklists(timeblocks);
+
+    // We copied the Task into the Timeblock, so free the heap allocation
+    delete task;
 }

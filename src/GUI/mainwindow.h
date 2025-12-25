@@ -10,6 +10,9 @@
 #include <QListWidget>
 #include <QHBoxLayout>
 #include <QStackedWidget>
+#include <QPushButton>
+#include <QIcon>
+#include <QVBoxLayout>
 
 // --- Scenes ---
 #include "todolistview.h"
@@ -46,10 +49,17 @@ public slots:
     // Left panel scene management
     void switchLeftPanel(Scene scene, QVariant data = {});
 
+    // Run updates
+    void onTaskCreated(Task *task, int timeblockIndex);
+
 public:
-    // Scenes
+    // Timeblocks loaded from database
+    std::vector<Timeblock> timeblocks;
+    Database db;
+
+    // --- Scenes ---
     DayScheduleView *scheduleView;
-    
+
     /** Left panel scenes
      * - Schedule view
      * - New entry view
@@ -64,4 +74,15 @@ public:
      */
     QStackedWidget *rightStack;
     TodoListView *todoListView;
+
+    // Thin edge panels for quick scene buttons
+    QWidget *leftEdgePanel = nullptr;
+    QWidget *rightEdgePanel = nullptr;
+    QVBoxLayout *leftEdgeLayout = nullptr;
+    QVBoxLayout *rightEdgeLayout = nullptr;
+
+    // Helpers to add icon buttons to the thin edge panels. The button will
+    // call switchLeftPanel/switchRightPanel with the provided scene and data.
+    void addLeftEdgeButton(const QIcon &icon, Scene scene, QVariant data = {});
+    void addRightEdgeButton(const QIcon &icon, Scene scene, QVariant data = {});
 };
