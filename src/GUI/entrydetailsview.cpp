@@ -64,7 +64,7 @@ void EntryDetailsView::loadTask(Task *task)
     // Due date string via Task API
     try
     {
-        std::string due = task->due_date_string();
+        std::string due = task->due_date_full_string();
         m_dueLabel->setText(QString::fromStdString("Due: " + due));
     }
     catch (...)

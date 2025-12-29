@@ -71,6 +71,7 @@ public:
     /**
      * Provide due date as a string
      */
+    std::string due_date_full_string() const;
     std::string due_date_string() const;
 
     /**

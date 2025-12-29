@@ -1,7 +1,5 @@
 #include <cmath>
 #include <cstring>
-#include <sstream>
-#include <iomanip>
 
 #include "log.h"
 #include "database.h"
@@ -128,6 +126,28 @@ void Task::update_due_date()
 /*                                  Interface                                 */
 /* -------------------------------------------------------------------------- */
 
+std::string Task::due_date_full_string() const
+{
+    if (!due_date)
+    {
+        return "N/A";
+    }
+
+    // Get UTC adjusted time struct
+    std::time_t t = due_date;
+    std::tm *tm_ptr = std::localtime(&t);
+
+    // Return full time string
+    if (!tm_ptr)
+    {
+        return "Invalid date";
+    }
+
+    char buffer[16];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %I:%M %p", tm_ptr);
+    return std::string(buffer);
+}
+
 std::string Task::due_date_string() const
 {
     if (!due_date)
@@ -140,15 +160,37 @@ std::string Task::due_date_string() const
     std::tm *tm_ptr = std::localtime(&t);
 
     // Return full time string
-    // TODO: String should be modified based on time left (i.e. year should be excluded if it's the same year as is due)
     if (!tm_ptr)
     {
         return "Invalid date";
     }
 
-    std::ostringstream oss;
-    oss << std::put_time(tm_ptr, "%Y-%m-%d %I:%M %p");
-    return oss.str(); // Return by value
+    // Return simplified time string
+    time_t now = time(nullptr);
+    if (t < now) // past due
+    {
+        char buffer[16];
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm_ptr);
+        return std::string(buffer);
+    }
+    else if (difftime(t, now) < 86400) // less than one day
+    {
+        char buffer[16];
+        std::strftime(buffer, sizeof(buffer), "%I:%M %p", tm_ptr);
+        return std::string(buffer);
+    }
+    else if (difftime(t, now) < 604800) // less than one week
+    {
+        char buffer[16];
+        std::strftime(buffer, sizeof(buffer), "%a %I:%M %p", tm_ptr);
+        return std::string(buffer);
+    }
+    else
+    {
+        char buffer[16];
+        std::strftime(buffer, sizeof(buffer), "%Y-%m-%d", tm_ptr);
+        return std::string(buffer);
+    }
 }
 
 std::string Task::priority_string() const
