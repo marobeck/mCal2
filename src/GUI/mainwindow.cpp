@@ -49,12 +49,14 @@ MainWindow::MainWindow(QWidget *parent)
     leftStack = new QStackedWidget(this);
     scheduleView = new DayScheduleView(this);
     newEntryView = new NewEntryView(this);
+    newTimeblockView = new NewTimeblockView(this);
     entryDetailsView = new EntryDetailsView(this);
 
     // Add schedule + detail/edit views to left stack
     leftStack->addWidget(scheduleView);     // index 0
     leftStack->addWidget(entryDetailsView); // index 1
     leftStack->addWidget(newEntryView);     // index 2
+    leftStack->addWidget(newTimeblockView); // index 3
 
     leftStack->setCurrentWidget(scheduleView);
 
@@ -80,6 +82,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // --- Edge icons ---
     addLeftEdgeButton(QIcon("../icons/schedule.png"), Scene::DaySchedule);
+    addLeftEdgeButton(QIcon("../icons/new_timeblock.png"), Scene::NewTimeblock);
     addLeftEdgeButton(QIcon("../icons/new_entry.png"), Scene::NewEntry);
 
     addRightEdgeButton(QIcon("../icons/todo_list.png"), Scene::TodoList);
@@ -101,6 +104,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // --- New entry handling ---
     connect(newEntryView, &NewEntryView::taskCreated, this, &MainWindow::onTaskCreated);
+    connect(newTimeblockView, &NewTimeblockView::timeblockCreated, this, &MainWindow::onTimeblockCreated);
 }
 
 void MainWindow::addLeftEdgeButton(const QIcon &icon, Scene scene, QVariant data)
@@ -168,6 +172,11 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         currentLeftScene = Scene::NewEntry;
         break;
 
+    case Scene::NewTimeblock:
+        leftStack->setCurrentWidget(newTimeblockView);
+        currentLeftScene = Scene::NewTimeblock;
+        break;
+
     case Scene::EntryDetails:
         if (data.canConvert<void *>())
         {
@@ -213,10 +222,10 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
     // copy the timeblock's uuid into the task
     strncpy(task->timeblock_uuid, timeblocks[timeblockIndex].uuid, UUID_LEN);
 
-    // Append to the in-memory model. Timeblock::append copies the Task.
+    // Append to in-memory model
     timeblocks[timeblockIndex].append(*task);
 
-    // Persist to DB (Database::insert_task expects a reference)
+    // Insert into database
     try
     {
         db.insert_task(*task);
@@ -228,9 +237,45 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
     }
 
     // Refresh the TodoListView with the new model snapshot
-    // TodoListView::updateTasklists expects std::vector<Timeblock>
     todoListView->updateTasklists(timeblocks);
 
     // We copied the Task into the Timeblock, so free the heap allocation
     delete task;
+}
+
+void MainWindow::onTimeblockCreated(Timeblock *timeblock)
+{
+    const char *TAG = "MainWindow::onTimeblockCreated";
+
+    LOGI(TAG, "Timeblock <%s> created", timeblock->name);
+
+    // Ensure timeblock has an id
+    if (timeblock->uuid[0] == '\0')
+    {
+        generate_uuid(timeblock->uuid);
+    }
+
+    // Append to in-memory model
+    timeblocks.push_back(*timeblock);
+
+    // Insert into database
+    try
+    {
+        db.insert_timeblock(*timeblock);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "DB insert failed: %d", err);
+        // handle rollback to prevent inconsistent state
+        timeblocks.pop_back(); // remove from in-memory model
+        return;
+    }
+
+    // Refresh the TodoListView with the new model snapshot
+    todoListView->updateTasklists(timeblocks);
+    // Also update NewEntryView's timeblock list
+    newEntryView->populateTimeblocks(timeblocks);
+
+    // Free the heap allocation
+    delete timeblock;
 }

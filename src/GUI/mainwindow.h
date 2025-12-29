@@ -17,6 +17,7 @@
 // --- Scenes ---
 #include "todolistview.h"
 #include "newentryview.h"
+#include "newtimeblockview.h"
 #include "entrydetailsview.h"
 #include "dayscheduleview.h"
 
@@ -28,6 +29,7 @@ enum class Scene
     TodoList,
     DaySchedule,
     NewEntry,
+    NewTimeblock,
     EntryDetails,
     Settings
 };
@@ -51,6 +53,7 @@ public slots:
 
     // Run updates
     void onTaskCreated(Task *task, int timeblockIndex);
+    void onTimeblockCreated(Timeblock *timeblock);
 
 public:
     // Timeblocks loaded from database
@@ -67,6 +70,7 @@ public:
      */
     QStackedWidget *leftStack;
     NewEntryView *newEntryView;
+    NewTimeblockView *newTimeblockView;
     EntryDetailsView *entryDetailsView;
 
     /** Right panel scenes
