@@ -15,7 +15,12 @@ TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
     name->setStyleSheet("font-weight: bold; font-size: 14px;");
 
     QLabel *due = new QLabel(QString::fromStdString("Due: " + t.due_date_string()));
-    QLabel *urgency = new QLabel("Urgency: " + QString::number(t.get_urgency()));
+
+    // Priority
+    // TODO: Replace with priority char
+    QLabel *urgency = new QLabel("Priority: " + QString::fromStdString(t.priority_string()));
+
+    // TODO: Add completed forum
 
     layout->addWidget(name);
     layout->addWidget(due);
