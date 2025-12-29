@@ -191,4 +191,8 @@ void NewEntryView::onCreateClicked()
 
     int tbIndex = m_timeblockCombo->currentIndex();
     emit taskCreated(t, tbIndex);
+
+    // Clear inputs
+    m_nameEdit->clear();
+    m_descEdit->clear();
 }
