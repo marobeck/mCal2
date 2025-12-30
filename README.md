@@ -1,3 +1,11 @@
+```
+              ______      _____ 
+   ____ ___  / ____/___ _/ /__ \
+  / __ `__ \/ /   / __ `/ /__/ /
+ / / / / / / /___/ /_/ / // __/ 
+/_/ /_/ /_/\____/\__,_/_//____/ 
+```
+
 A multiplatform calendar app based on the concept of taskblocks, ideal for organizing projects and habits.
 
 # Objectives
