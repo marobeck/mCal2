@@ -9,7 +9,7 @@ class EntryDetailsView : public QWidget
     Q_OBJECT
 public:
     explicit EntryDetailsView(QWidget *parent = nullptr);
-    void loadTask(Task *task);
+    void loadTask(const Task *task);
 
 private:
     // Persistent widgets that are created once and updated by loadTask

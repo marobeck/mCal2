@@ -20,16 +20,22 @@
 #include <QSize>
 #include <QSpacerItem>
 
-// Widgets
-#include "taskitemwidget.h"
-
 /* -------------------------------------------------------------------------- */
 /*                                     GUI                                    */
 /* -------------------------------------------------------------------------- */
 
-MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
+MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
+    : QMainWindow(parent), repo(dataPtr)
 {
+    const char *TAG = "MainWindow::Constructor";
+    LOGI(TAG, "Initializing main window...");
+
+    if (!repo)
+    {
+        LOGE(TAG, "No CalendarRepository provided to MainWindow!");
+        throw std::runtime_error("No CalendarRepository provided to MainWindow");
+    }
+
     QWidget *central = new QWidget(this);
     setCentralWidget(central);
     // --- Left / Right thin edge panels (icon buttons) ---
@@ -63,7 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
     // --- Right side scene manager ---
     rightStack = new QStackedWidget(this);
 
-    todoListView = new TodoListView(this);
+    todoListView = new TodoListView(this, repo);
 
     // Add to stack
     rightStack->addWidget(todoListView); // index 0
@@ -91,11 +97,19 @@ MainWindow::MainWindow(QWidget *parent)
     leftEdgeLayout->addStretch();
     rightEdgeLayout->addStretch();
 
+    // Update the views with the current model
+    modelChanged();
+
+    /* -------------------------------------------------------------------------- */
+    /*                              Signal management                             */
+    /* -------------------------------------------------------------------------- */
+
     // --- Todo list task selection handling ---
-    connect(todoListView, &TodoListView::taskSelected, this, [this](Task *t)
+    connect(todoListView, &TodoListView::taskSelected, this, [this](const Task *t)
             {
         // When a task is selected in the todo list, show its details on the right panel
-        QVariant v = QVariant::fromValue(static_cast<void*>(t));
+        Q_ASSERT(t);    // Enforce non-null task pointer
+        QVariant v = QVariant::fromValue(t);
         switchLeftPanel(Scene::EntryDetails, v); });
     connect(todoListView, &TodoListView::taskDeselected, this, [this]()
             {
@@ -105,6 +119,8 @@ MainWindow::MainWindow(QWidget *parent)
     // --- New entry handling ---
     connect(newEntryView, &NewEntryView::taskCreated, this, &MainWindow::onTaskCreated);
     connect(newTimeblockView, &NewTimeblockView::timeblockCreated, this, &MainWindow::onTimeblockCreated);
+
+    connect(repo, &CalendarRepository::modelChanged, this, &MainWindow::modelChanged);
 }
 
 void MainWindow::addLeftEdgeButton(const QIcon &icon, Scene scene, QVariant data)
@@ -164,7 +180,7 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         if (data.canConvert<void *>())
         {
             Task *t = static_cast<Task *>(data.value<void *>());
-            newEntryView->populateTimeblocks(timeblocks);
+            newEntryView->populateTimeblocks(repo->timeblocks());
         }
         // Show the details/edit view on the left (use EntryDetailsView to
         // display task fields when switching from the todo list).
@@ -178,9 +194,10 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         break;
 
     case Scene::EntryDetails:
-        if (data.canConvert<void *>())
+        if (data.canConvert<const Task *>())
         {
-            Task *t = static_cast<Task *>(data.value<void *>());
+            const Task *t = data.value<const Task *>();
+            Q_ASSERT(t);
             entryDetailsView->loadTask(t);
         }
         leftStack->setCurrentWidget(entryDetailsView);
@@ -206,38 +223,7 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
 
     LOGI(TAG, "Task <%s> created for timeblock index %d", task->name, timeblockIndex);
 
-    // Sanity check index
-    if (timeblockIndex < 0 || static_cast<size_t>(timeblockIndex) >= timeblocks.size())
-    {
-        LOGE(TAG, "Invalid timeblock index %d", timeblockIndex);
-        delete task; // avoid leak
-        return;
-    }
-
-    // Ensure task has an id and timeblock_uuid set
-    if (task->uuid[0] == '\0')
-    {
-        generate_uuid(task->uuid);
-    }
-    // copy the timeblock's uuid into the task
-    strncpy(task->timeblock_uuid, timeblocks[timeblockIndex].uuid, UUID_LEN);
-
-    // Append to in-memory model
-    timeblocks[timeblockIndex].append(*task);
-
-    // Insert into database
-    try
-    {
-        db.insert_task(*task);
-    }
-    catch (int err)
-    {
-        LOGE(TAG, "DB insert failed: %d", err);
-        // handle rollback or show error UI as needed
-    }
-
-    // Refresh the TodoListView with the new model snapshot
-    todoListView->updateTasklists(timeblocks);
+    repo->addTask(*task, timeblockIndex);
 
     // We copied the Task into the Timeblock, so free the heap allocation
     delete task;
@@ -249,33 +235,19 @@ void MainWindow::onTimeblockCreated(Timeblock *timeblock)
 
     LOGI(TAG, "Timeblock <%s> created", timeblock->name);
 
-    // Ensure timeblock has an id
-    if (timeblock->uuid[0] == '\0')
-    {
-        generate_uuid(timeblock->uuid);
-    }
-
-    // Append to in-memory model
-    timeblocks.push_back(*timeblock);
-
-    // Insert into database
-    try
-    {
-        db.insert_timeblock(*timeblock);
-    }
-    catch (int err)
-    {
-        LOGE(TAG, "DB insert failed: %d", err);
-        // handle rollback to prevent inconsistent state
-        timeblocks.pop_back(); // remove from in-memory model
-        return;
-    }
-
-    // Refresh the TodoListView with the new model snapshot
-    todoListView->updateTasklists(timeblocks);
-    // Also update NewEntryView's timeblock list
-    newEntryView->populateTimeblocks(timeblocks);
+    repo->addTimeblock(*timeblock);
 
     // Free the heap allocation
     delete timeblock;
+}
+
+void MainWindow::modelChanged()
+{
+    const char *TAG = "MainWindow::modelChanged";
+    LOGI(TAG, "Calendar model has changed; updating views...");
+
+    // Refresh the TodoListView with the new model snapshot
+    todoListView->updateTasklists(repo->timeblocks());
+    // Also update NewEntryView's timeblock list
+    newEntryView->populateTimeblocks(repo->timeblocks());
 }

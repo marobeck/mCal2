@@ -162,6 +162,52 @@ void Database::load_timeblocks(std::vector<Timeblock> &timeblocks)
     LOGI(TAG, "Loaded %zu timeblocks from database", timeblocks.size());
 }
 
+void Database::update_timeblock(const Timeblock &tb)
+{
+    const char *TAG = "DB::update_timeblock";
+
+    /**
+     * Timeblock fields:
+     * uuid
+     * status
+     * name
+     * description
+     * day_frequency
+     * duration
+     * start
+     * day_start
+     */
+    const char *sql = "UPDATE timeblocks SET status = ?, name = ?, description = ?, day_frequency = ?, duration = ?, start = ?, day_start = ? WHERE uuid = ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_int(stmt, 1, tb.status);
+    sqlite3_bind_text(stmt, 2, tb.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, tb.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 4, tb.day_frequency.to_sql());
+    sqlite3_bind_int64(stmt, 5, tb.duration);
+    sqlite3_bind_int64(stmt, 6, tb.start);
+    sqlite3_bind_int64(stmt, 7, tb.day_start);
+    sqlite3_bind_text(stmt, 8, tb.uuid, -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc == SQLITE_DONE)
+    {
+        LOGI(TAG, "Updated timeblock <%s> in database", tb.name);
+        return;
+    }
+
+    LOGE(TAG, "Failed to update timeblock <%s>: %s", tb.name, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
 void Database::delete_timeblock(const char *uuid)
 {
     const char *TAG = "DB::delete_timeblock";
@@ -273,13 +319,22 @@ void Database::load_tasks(Timeblock *timeblock)
     return;
 }
 
-void Database::update_task_status(const char *uuid, TaskStatus new_status)
+void Database::update_task(const Task &task)
 {
-    const char *TAG = "DB::update_task_status";
+    const char *TAG = "DB::update_task";
 
-    int status_int = static_cast<int>(new_status);
-
-    const char *sql = "UPDATE tasks SET status = ? WHERE uuid = ?;";
+    /**
+     * Task fields:
+     * uuid
+     * timeblock_uuid
+     * name
+     * description
+     * due_date
+     * priority
+     * status
+     * goal_spec
+     */
+    const char *sql = "UPDATE tasks SET timeblock_uuid = ?, name = ?, description = ?, due_date = ?, priority = ?, status = ?, goal_spec = ? WHERE uuid = ?;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -288,18 +343,25 @@ void Database::update_task_status(const char *uuid, TaskStatus new_status)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_int(stmt, 1, status_int);
-    sqlite3_bind_text(stmt, 2, uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, task.timeblock_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, task.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 4, task.due_date);
+    sqlite3_bind_int(stmt, 5, static_cast<int>(task.priority));
+    sqlite3_bind_int(stmt, 6, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 7, task.goal_spec.to_sql());
+    sqlite3_bind_text(stmt, 8, task.uuid, -1, SQLITE_STATIC);
 
+    // Execute
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (rc == SQLITE_DONE)
     {
-        LOGI(TAG, "Updated task <%s> status to %d", uuid, status_int);
+        LOGI(TAG, "Updated task <%s> in database", task.name);
         return;
     }
 
-    LOGE(TAG, "Failed to update task <%s> status: %s", uuid, sqlite3_errmsg(db));
+    LOGE(TAG, "Failed to update task <%s>: %s", task.name, sqlite3_errmsg(db));
     throw sqlite3_errcode(db);
 }
 
@@ -406,4 +468,74 @@ bool Database::habit_entry_exists(const char *task_uuid, const char *date_iso860
 
     sqlite3_finalize(stmt);
     return false;
+}
+
+// Preview habit completions over the last N days for a task and fill task.completed_days
+void Database::load_habit_completion_preview(Task &task, const char *current_date_iso8601)
+{
+    const char *TAG = "DB::load_habit_completion_preview";
+
+    size_t len = sizeof(task.completed_days) / sizeof(task.completed_days[0]);
+    LOGI(TAG, "Checking the last %zu habit completions for task <%s> from date %s", len, task.name, current_date_iso8601);
+
+    // Recursive CTE to get last N days and check for habit entries
+    const char *sql =
+        R"(WITH RECURSIVE days(n, d) AS (
+      SELECT 0, date(?)
+      UNION ALL
+      SELECT n+1, date(d, '-1 day') FROM days WHERE n+1 < ?
+    )
+    SELECT n, d, CASE WHEN he.date IS NOT NULL THEN 1 ELSE 0 END AS done
+    FROM days
+    LEFT JOIN habit_entries he
+      ON he.task_uuid = ? AND he.date = d
+    ORDER BY n;)";
+
+    sqlite3_stmt *stmt = nullptr;
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    // Bind params
+    sqlite3_bind_text(stmt, 1, current_date_iso8601, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(len));
+    sqlite3_bind_text(stmt, 3, task.uuid, -1, SQLITE_STATIC);
+
+    size_t index = 0;
+    while (sqlite3_step(stmt) == SQLITE_ROW && index < len)
+    {
+        // n = sqlite3_column_int(stmt, 0)  (should equal index)
+        const unsigned char *date_text = sqlite3_column_text(stmt, 1); // "YYYY-MM-DD"
+        int done = sqlite3_column_int(stmt, 2);                        // 0 or 1
+
+        if (date_text && done)
+        {
+            struct tm tm = {};
+            if (strptime(reinterpret_cast<const char *>(date_text), "%Y-%m-%d", &tm))
+            {
+                time_t t = mktime(&tm);
+                task.completed_days[index] = t; // index 0 => current date
+            }
+            else
+            {
+                LOGW(TAG, "Failed to parse date string %s", date_text);
+                task.completed_days[index] = 0;
+            }
+        }
+        else
+        {
+            task.completed_days[index] = 0;
+        }
+        ++index;
+    }
+
+    // If for any reason rows < len, fill the rest with 0
+    for (; index < len; ++index)
+        task.completed_days[index] = 0;
+
+    sqlite3_finalize(stmt);
+
+    LOGI(TAG, "Loaded %zu habit completions for task <%s>", index, task.name);
 }

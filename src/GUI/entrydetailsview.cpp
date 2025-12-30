@@ -36,7 +36,7 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     layout->addStretch();
 }
 
-void EntryDetailsView::loadTask(Task *task)
+void EntryDetailsView::loadTask(const Task *task)
 {
     const char *TAG = "EntryDetailsView::loadTask";
 
@@ -44,6 +44,9 @@ void EntryDetailsView::loadTask(Task *task)
 
     if (!task)
     {
+        LOGW(TAG, "Null task provided to loadTask; clearing view.");
+
+        // Clear all fields
         m_nameLabel->setText("");
         m_descLabel->setText("");
         m_dueLabel->setText("");

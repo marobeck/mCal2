@@ -1,7 +1,7 @@
 #pragma once
 
 // --- Data ---
-#include <vector>
+#include "calendarrepository.h"
 
 // --- UI ---
 #include <QMainWindow>
@@ -20,6 +20,8 @@
 #include "newtimeblockview.h"
 #include "entrydetailsview.h"
 #include "dayscheduleview.h"
+
+Q_DECLARE_METATYPE(const Task *)
 
 /**
  * Scenes in the application
@@ -43,7 +45,7 @@ private:
     Scene currentRightScene = Scene::TodoList;
 
 public:
-    MainWindow(QWidget *parent = nullptr);
+    MainWindow(QWidget *parent = nullptr, CalendarRepository *dataPtr = nullptr);
 
 public slots:
     // Scene managament
@@ -54,11 +56,11 @@ public slots:
     // Run updates
     void onTaskCreated(Task *task, int timeblockIndex);
     void onTimeblockCreated(Timeblock *timeblock);
+    void modelChanged();
 
 public:
-    // Timeblocks loaded from database
-    std::vector<Timeblock> timeblocks;
-    Database db;
+    // Access to memory and database
+    CalendarRepository *repo = nullptr;
 
     // --- Scenes ---
     DayScheduleView *scheduleView;

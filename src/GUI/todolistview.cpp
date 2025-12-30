@@ -12,9 +12,18 @@
 // --- Widgets ---
 #include "taskitemwidget.h"
 
-TodoListView::TodoListView(QWidget *parent)
-    : QWidget(parent)
+TodoListView::TodoListView(QWidget *parent, CalendarRepository *dataRepo)
+    : QWidget(parent), repo(dataRepo)
 {
+    const char *TAG = "TodoListView::Constructor";
+    LOGI(TAG, "Initializing TodoListView...");
+
+    if (!repo)
+    {
+        LOGE(TAG, "No CalendarRepository provided to TodoListView!");
+        throw std::runtime_error("No CalendarRepository provided to TodoListView");
+    }
+
     // Container for all todo lists
     todoContainer = new QWidget(this);
     todoLayout = new QHBoxLayout(todoContainer);
@@ -88,6 +97,9 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             item->setSizeHint(widget->sizeHint());
             list->addItem(item);
             list->setItemWidget(item, widget);
+
+            // --- Todo list widget handling ---
+            connect(widget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
         }
 
         colLayout->addWidget(list);
@@ -128,21 +140,20 @@ void TodoListView::onListCurrentItemChanged(QListWidgetItem *current, QListWidge
     }
 
     TaskItemWidget *w = qobject_cast<TaskItemWidget *>(list->itemWidget(current));
-    if (w && w->task())
-    {
-        emit taskSelected(w->task());
-        return;
-    }
 
-    LOGE(TAG, "Failed to get TaskItemWidget from current item.");
-    
-    // Fallback: if the Task* was stored in the item data
-    QVariant v = current->data(Qt::UserRole);
-    if (v.isValid())
-    {
-        qulonglong raw = v.toULongLong();
-        Task *t = reinterpret_cast<Task *>(raw);
-        if (t)
-            emit taskSelected(t);
-    }
+    emit taskSelected(&w->task());
+    return;
+}
+
+void TodoListView::onTaskCompleted(const Task &task, bool completed)
+{
+    const char *TAG = "MainWindow::onTaskCompleted";
+
+    LOGI(TAG, "Task <%s> marked as %s", task.name, completed ? "completed" : "incomplete");
+
+    // Update task status
+    Task new_task = task;
+    new_task.status = completed ? TaskStatus::COMPLETE : TaskStatus::INCOMPLETE;
+
+    repo->updateTask(new_task);
 }

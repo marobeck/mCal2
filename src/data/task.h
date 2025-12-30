@@ -44,8 +44,11 @@ public:
 
     // --- Habit parameters ---
 
-    GoalSpec goal_spec;        // Goal specification for habit tasks
-    time_t completed_days[10]; // cache of the last 10 timestamps of days where task was complete
+    GoalSpec goal_spec; // Goal specification for habit tasks
+
+    // The last days where task was complete (for GUI preview) where index 0 = today
+    // 0 = incomplete, non-zero = completed date as time_t
+    time_t completed_days[10];
 
     // --- Descriptive fields ---
     char *name = NULL;   // Title of entry
