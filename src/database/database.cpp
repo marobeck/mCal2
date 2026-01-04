@@ -531,6 +531,11 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
         */
         if (done)
             task.completed_days[index] = TaskStatus::COMPLETE;
+        else
+        {
+            if (task.completed_days[index] != TaskStatus::IN_PROGRESS)
+                task.completed_days[index] = TaskStatus::INCOMPLETE;
+        }
         ++index;
     }
 

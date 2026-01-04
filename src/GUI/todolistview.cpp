@@ -49,6 +49,10 @@ TodoListView::TodoListView(QWidget *parent, CalendarRepository *dataRepo)
     setLayout(rootLayout);
 }
 
+void TodoListView::updateTasklist(const Timeblock &tb)
+{
+}
+
 void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
 {
     const char *TAG = "TodoListView::updateTasklists";
@@ -167,7 +171,7 @@ void TodoListView::onTaskCompleted(const Task &task, int checkState)
             // For un-completing a habit, we remove today's entry
             repo->removeHabitEntry(task.uuid, now);
         }
-        repo->habitCompletionPreview(const_cast<Task &>(task));
+        // repo->habitCompletionPreview(const_cast<Task &>(task));
         return;
     }
 

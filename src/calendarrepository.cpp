@@ -2,6 +2,8 @@
 #include "log.h"
 
 #include <time.h>
+#include <algorithm>
+#include <numeric>
 
 /* -------------------------------------------------------------------------- */
 /*                                Constructors                                */
@@ -33,6 +35,11 @@ void CalendarRepository::loadAll()
     {
         m_db.load_tasks(&tb);
 
+        // Sort tasks within this timeblock by descending urgency (highest urgency first)
+        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
+                  { return a.get_urgency() > b.get_urgency(); });
+
+        // Load habit preview for any habit tasks
         for (auto &task : tb.tasks)
         {
             if (task.status == TaskStatus::HABIT)
@@ -42,6 +49,22 @@ void CalendarRepository::loadAll()
             }
         }
     }
+
+    // After tasks are sorted within each timeblock, sort timeblocks by the
+    // average urgency of their top-3 tasks (higher average comes first).
+    auto top3_avg = [](const Timeblock &tb) -> float
+    {
+        size_t n = std::min<size_t>(3, tb.tasks.size());
+        if (n == 0)
+            return 0.0f;
+        float sum = 0.0f;
+        for (size_t i = 0; i < n; ++i)
+            sum += tb.tasks[i].get_urgency();
+        return sum / static_cast<float>(n);
+    };
+
+    std::sort(m_timeblocks.begin(), m_timeblocks.end(), [&](const Timeblock &a, const Timeblock &b)
+              { return top3_avg(a) > top3_avg(b); });
 }
 
 void CalendarRepository::habitCompletionPreview(Task &task)
@@ -64,7 +87,7 @@ void CalendarRepository::habitCompletionPreview(Task &task)
     // Day Frequency mode
     if (task.goal_spec.mode() == GoalSpec::Mode::DayFrequency)
     {
-        // Populate compelted_days with target completions
+        // Populate completed_days with target completions
         for (size_t i = 0; i < sizeof(task.completed_days) / sizeof(task.completed_days[0]); ++i)
         {
             // Current day to weekday enum
@@ -122,7 +145,6 @@ bool CalendarRepository::addTask(Task &task, size_t timeblockIndex)
 
     // copy the timeblock's uuid into the task
     strncpy(task.timeblock_uuid, m_timeblocks[timeblockIndex].uuid, UUID_LEN);
-    m_timeblocks[timeblockIndex].tasks.push_back(task);
 
     try
     {
@@ -131,12 +153,26 @@ bool CalendarRepository::addTask(Task &task, size_t timeblockIndex)
     catch (int err)
     {
         LOGE(TAG, "Failed to persist task <%s>: %d", task.name, err);
-        m_timeblocks[timeblockIndex].tasks.pop_back(); // Rollback in-memory addition
-
         return false;
     }
 
-    LOGI(TAG, "Persisted task <%s> to database", task.name);
+    // Find spot in memory model to insert based on urgency
+    float taskUrgency = task.get_urgency();
+    for (size_t i = 0; i < m_timeblocks[timeblockIndex].tasks.size(); i++)
+    {
+        if (taskUrgency > m_timeblocks[timeblockIndex].tasks[i].get_urgency())
+        {
+            m_timeblocks[timeblockIndex].tasks.insert(m_timeblocks[timeblockIndex].tasks.begin() + i, task);
+            LOGI(TAG, "Inserted task <%s> at position %zu in timeblock <%s>", task.name, i, m_timeblocks[timeblockIndex].name);
+
+            // Notify listeners
+            emit modelChanged();
+
+            return true;
+        }
+    }
+    m_timeblocks[timeblockIndex].tasks.push_back(task);
+    LOGI(TAG, "Appended task <%s> at end of timeblock <%s>", task.name, m_timeblocks[timeblockIndex].name);
 
     // Notify listeners
     emit modelChanged();
@@ -183,24 +219,34 @@ bool CalendarRepository::removeTask(const char *taskUuid)
 bool CalendarRepository::updateTask(const Task &task)
 {
     const char *TAG = "CalendarRepository::updateTask";
-    LOGI(TAG, "Updating task <%s>", task.name);
+    LOGI(TAG, "Updating task <%s> to status <%s> (%0.2f)", task.name,
+         task.status == TaskStatus::COMPLETE      ? "COMPLETE"
+         : task.status == TaskStatus::IN_PROGRESS ? "IN_PROGRESS"
+         : task.status == TaskStatus::INCOMPLETE  ? "INCOMPLETE"
+                                                  : "UNKNOWN",
+         task.get_urgency());
 
     // Find in-memory model
+    Timeblock *parentTimeblock = nullptr;
     Task *existingTask = nullptr;
+    size_t taskIdx = 0;
     for (auto &tb : m_timeblocks)
     {
-        for (auto &t : tb.tasks)
+        for (size_t i = 0; i < tb.tasks.size(); i++)
         {
+            Task &t = tb.tasks[i];
             if (strcmp(t.uuid, task.uuid) == 0)
             {
                 existingTask = &t;
+                parentTimeblock = &tb;
+                taskIdx = i;
                 break;
             }
         }
     }
     if (!existingTask)
     {
-        LOGE(TAG, "Task with UUID <%s> not found in memory", task.uuid);
+        LOGE(TAG, "Task with UUID <%s> not found in memory, no modifications made", task.uuid);
         return false;
     }
 
@@ -215,10 +261,30 @@ bool CalendarRepository::updateTask(const Task &task)
         return false;
     }
 
-    // Update in-memory model
-    *existingTask = task;
+    // Adjust location in timeblock based on urgency
+    float taskUrgency = task.get_urgency();
+    for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
+    {
+        float u = parentTimeblock->tasks[i].get_urgency();
+        if (taskUrgency > u || u < 0.00001f)
+        {
+            if (i == taskIdx)
+            {
+                // No move needed
+                // Update existing task data
+                *existingTask = task;
+                break;
+            }
+            // Move task to this position
+            parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
+            parentTimeblock->tasks.insert(parentTimeblock->tasks.begin() + i, task);
+            LOGI(TAG, "Moved task <%s> (%0.2f) to position %zu in timeblock <%s>", task.name, taskUrgency, i, parentTimeblock->name);
+            break;
+        }
+    }
 
     // Notify listeners
+    // TODO: Create new signal for just timeblock updates
     emit modelChanged();
 
     return true;
@@ -235,6 +301,49 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
     {
         m_db.add_habit_entry(taskUuid, dateIso8601);
         LOGI(TAG, "Persisted habit entry to database");
+        // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
+        Timeblock *parentTb = nullptr;
+        Task *foundTask = nullptr;
+        size_t taskIdx = 0;
+        for (auto &tb : m_timeblocks)
+        {
+            for (size_t i = 0; i < tb.tasks.size(); ++i)
+            {
+                if (strcmp(tb.tasks[i].uuid, taskUuid) == 0)
+                {
+                    parentTb = &tb;
+                    foundTask = &tb.tasks[i];
+                    taskIdx = i;
+                    break;
+                }
+            }
+            if (foundTask)
+                break;
+        }
+
+        if (foundTask && parentTb)
+        {
+            // Make a copy, refresh preview for the specific date, and compute new urgency
+            Task updated = *foundTask;
+            updated.update_due_date();
+            m_db.load_habit_completion_preview(updated, dateIso8601);
+
+            float newUrgency = updated.get_urgency();
+
+            // Remove original and insert updated at proper sorted position
+            parentTb->tasks.erase(parentTb->tasks.begin() + taskIdx);
+
+            size_t insertPos = 0;
+            for (; insertPos < parentTb->tasks.size(); ++insertPos)
+            {
+                if (newUrgency > parentTb->tasks[insertPos].get_urgency())
+                    break;
+            }
+            parentTb->tasks.insert(parentTb->tasks.begin() + insertPos, updated);
+            LOGI(TAG, "Updated habit task <%s> and moved to position %zu in timeblock <%s>", updated.name, insertPos, parentTb->name);
+        }
+
+        emit modelChanged();
         return true;
     }
     catch (int err)
@@ -242,8 +351,6 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
         LOGE(TAG, "Failed to persist habit entry: %d", err);
         return false;
     }
-
-    emit modelChanged();
 }
 
 bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *dateIso8601)
@@ -254,7 +361,63 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
     try
     {
         m_db.remove_habit_entry(taskUuid, dateIso8601);
+        bool dbExists = m_db.habit_entry_exists(taskUuid, dateIso8601); // Double-check database state
+        if (dbExists)
+        {
+            LOGE(TAG, "Failed to remove habit entry from database; still exists after removal attempt");
+            return false;
+        }
         LOGI(TAG, "Removed habit entry from database");
+        // Update in-memory model similarly to addHabitEntry: refresh preview and reposition by urgency
+        Timeblock *parentTb = nullptr;
+        Task *foundTask = nullptr;
+        size_t taskIdx = 0;
+        for (auto &tb : m_timeblocks)
+        {
+            for (size_t i = 0; i < tb.tasks.size(); ++i)
+            {
+                if (strcmp(tb.tasks[i].uuid, taskUuid) == 0)
+                {
+                    parentTb = &tb;
+                    foundTask = &tb.tasks[i];
+                    taskIdx = i;
+                    break;
+                }
+            }
+            if (foundTask)
+                break;
+        }
+
+        if (foundTask && parentTb)
+        {
+            Task updated = *foundTask;
+            updated.update_due_date();
+            m_db.load_habit_completion_preview(updated, dateIso8601);
+            // LOGI(TAG, "Refreshed habit completion preview for task <%s> (%s)", updated.name, updated.uuid);
+            // for (size_t i = 0; i < sizeof(updated.completed_days) / sizeof(updated.completed_days[0]); ++i)
+            // {
+            //     LOGI(TAG, "  Day -%zu: %s", i,
+            //          updated.completed_days[i] == TaskStatus::COMPLETE      ? "COMPLETE"
+            //          : updated.completed_days[i] == TaskStatus::IN_PROGRESS ? "IN_PROGRESS"
+            //          : updated.completed_days[i] == TaskStatus::INCOMPLETE  ? "INCOMPLETE"
+            //                                                                 : "UNKNOWN");
+            // }
+
+            float newUrgency = updated.get_urgency();
+
+            parentTb->tasks.erase(parentTb->tasks.begin() + taskIdx);
+
+            size_t insertPos = 0;
+            for (; insertPos < parentTb->tasks.size(); ++insertPos)
+            {
+                if (newUrgency > parentTb->tasks[insertPos].get_urgency())
+                    break;
+            }
+            parentTb->tasks.insert(parentTb->tasks.begin() + insertPos, updated);
+            LOGI(TAG, "Updated habit task <%s> (%0.2f) and moved to position %zu in timeblock <%s>", updated.name, newUrgency, insertPos, parentTb->name);
+        }
+
+        emit modelChanged();
         return true;
     }
     catch (int err)
@@ -262,8 +425,6 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         LOGE(TAG, "Failed to remove habit entry: %d", err);
         return false;
     }
-
-    emit modelChanged();
 }
 
 bool CalendarRepository::habitEntryExists(const char *taskUuid, const char *dateIso8601)

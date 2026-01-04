@@ -15,6 +15,7 @@ class TodoListView : public QWidget
     Q_OBJECT
 public:
     explicit TodoListView(QWidget *parent = nullptr, CalendarRepository *dataRepo = nullptr);
+    void updateTasklist(const Timeblock &timeblock);
     void updateTasklists(const std::vector<Timeblock> &timeblocks);
 
 signals:
