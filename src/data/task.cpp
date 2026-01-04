@@ -164,7 +164,7 @@ std::string Task::due_date_full_string() const
         return "Invalid date";
     }
 
-    char buffer[16];
+    char buffer[20];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %I:%M %p", tm_ptr);
     return std::string(buffer);
 }
@@ -310,6 +310,10 @@ float Task::get_urgency() const
     const float C = 0.8f; // Undue penalty constant
 
     if (priority == Priority::NONE)
+    {
+        return 0.0f;
+    }
+    if (status == TaskStatus::HABIT && completed_days[0] == TaskStatus::COMPLETE)
     {
         return 0.0f;
     }
