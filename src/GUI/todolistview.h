@@ -24,8 +24,8 @@ signals:
 private slots:
     void onListCurrentItemChanged(QListWidgetItem *current, QListWidgetItem *previous);
 
-    // Manage task completion toggles
-    void onTaskCompleted(const Task &task, bool completed);
+    // Manage task completion toggles (receives Qt::CheckState values)
+    void onTaskCompleted(const Task &task, int checkState);
 
 private:
     CalendarRepository *repo = nullptr;

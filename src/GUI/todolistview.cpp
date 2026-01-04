@@ -89,7 +89,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         list->setMinimumWidth(200);
         connect(list, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
 
-        for (const auto &task : tb.tasks)
+        for (auto &task : tb.tasks)
         {
             QListWidgetItem *item = new QListWidgetItem(list);
             TaskItemWidget *widget = new TaskItemWidget(task);
@@ -97,6 +97,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             item->setSizeHint(widget->sizeHint());
             list->addItem(item);
             list->setItemWidget(item, widget);
+            repo->habitCompletionPreview(const_cast<Task &>(task));
 
             // --- Todo list widget handling ---
             connect(widget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
@@ -145,15 +146,50 @@ void TodoListView::onListCurrentItemChanged(QListWidgetItem *current, QListWidge
     return;
 }
 
-void TodoListView::onTaskCompleted(const Task &task, bool completed)
+void TodoListView::onTaskCompleted(const Task &task, int checkState)
 {
     const char *TAG = "MainWindow::onTaskCompleted";
 
-    LOGI(TAG, "Task <%s> marked as %s", task.name, completed ? "completed" : "incomplete");
+    if (task.status == TaskStatus::HABIT)
+    {
+        time_t now = time(nullptr);
+        struct tm *tm_now = localtime(&now);
+        LOGI(TAG, "Habit <%s> completion toggled with state %d on %04d-%02d-%02d", task.name,
+             checkState, tm_now->tm_year + 1900, tm_now->tm_mon + 1, tm_now->tm_mday);
+
+        if (checkState == Qt::Checked)
+        {
+            // For habits, we just log the completion date
+            repo->addHabitEntry(task.uuid, now);
+        }
+        else if (checkState == Qt::Unchecked)
+        {
+            // For un-completing a habit, we remove today's entry
+            repo->removeHabitEntry(task.uuid, now);
+        }
+        repo->habitCompletionPreview(const_cast<Task &>(task));
+        return;
+    }
+
+    // For non-habits we accept three states: Unchecked, PartiallyChecked (in-progress), Checked
+    const char *state_str = "unknown";
+    if (checkState == Qt::Unchecked)
+        state_str = "incomplete";
+    else if (checkState == Qt::PartiallyChecked)
+        state_str = "in-progress";
+    else if (checkState == Qt::Checked)
+        state_str = "completed";
+
+    LOGI(TAG, "Task <%s> marked as %s (state %d)", task.name, state_str, checkState);
 
     // Update task status
     Task new_task = task;
-    new_task.status = completed ? TaskStatus::COMPLETE : TaskStatus::INCOMPLETE;
+    if (checkState == Qt::Unchecked)
+        new_task.status = TaskStatus::INCOMPLETE;
+    else if (checkState == Qt::PartiallyChecked)
+        new_task.status = TaskStatus::IN_PROGRESS;
+    else if (checkState == Qt::Checked)
+        new_task.status = TaskStatus::COMPLETE;
 
     repo->updateTask(new_task);
 }

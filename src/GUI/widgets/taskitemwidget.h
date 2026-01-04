@@ -19,8 +19,8 @@ public:
     const Task &task() const; // Get associated task for reading
 
 signals:
-    void completionToggled(const Task &task, bool completed);
+    void completionToggled(const Task &task, int checkState);
 
 private slots:
-    void onCompletionChanged(bool checked);
+    void onCompletionChanged(int checkState);
 };
