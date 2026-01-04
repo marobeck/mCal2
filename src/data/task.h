@@ -47,8 +47,8 @@ public:
     GoalSpec goal_spec; // Goal specification for habit tasks
 
     // The last days where task was complete (for GUI preview) where index 0 = today
-    // 0 = incomplete, non-zero = completed date as time_t
-    time_t completed_days[10];
+    // INCOMPLETE = not done, COMPLETE = done, IN_PROGRESS = to do
+    TaskStatus completed_days[10];
 
     // --- Descriptive fields ---
     char *name = NULL;   // Title of entry
@@ -89,11 +89,4 @@ public:
      * Updates the due date of a if a task is repeating, otherwise does nothing
      */
     void update_due_date();
-
-    // --- Database functions ---
-
-    /**
-     * TODO: Synchronize task data from database into this object
-     */
-    int synchronize_from_db(sqlite3 *db);
 };

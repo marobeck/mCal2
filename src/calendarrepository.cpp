@@ -32,6 +32,15 @@ void CalendarRepository::loadAll()
     for (auto &tb : m_timeblocks)
     {
         m_db.load_tasks(&tb);
+
+        for (auto &task : tb.tasks)
+        {
+            if (task.status == TaskStatus::HABIT)
+            {
+                // Load habit completion preview
+                habitCompletionPreview(task);
+            }
+        }
     }
 }
 
@@ -40,12 +49,39 @@ void CalendarRepository::habitCompletionPreview(Task &task)
     const char *TAG = "CalendarRepository::habitCompletionPreview";
     LOGI(TAG, "Loading habit completion preview for task <%s>", task.name);
 
+    if (task.status != TaskStatus::HABIT)
+    {
+        LOGW(TAG, "Task <%s> is not a habit; skipping preview load", task.name);
+        return;
+    }
+
     // Get current date in ISO 8601 format
     char now_str[11]; // "YYYY-MM-DD" + null terminator
+    time_t now = time(nullptr);
+    struct tm local_tm = *localtime(&now);
+    strftime(now_str, sizeof(now_str), "%Y-%m-%d", &local_tm);
+
+    // Day Frequency mode
+    if (task.goal_spec.mode() == GoalSpec::Mode::DayFrequency)
     {
-        time_t now = time(nullptr);
-        strftime(now_str, sizeof(now_str), "%Y-%m-%d", localtime(&now));
+        // Populate compelted_days with target completions
+        for (size_t i = 0; i < sizeof(task.completed_days) / sizeof(task.completed_days[0]); ++i)
+        {
+            // Current day to weekday enum
+            int wday = (local_tm.tm_wday - i) % 7;
+            if (task.goal_spec.has_day(wday))
+            {
+                task.completed_days[i] = TaskStatus::IN_PROGRESS; // Target completion
+            }
+            else
+            {
+                task.completed_days[i] = TaskStatus::INCOMPLETE;
+            }
+        }
     }
+
+    // Note new due date
+    task.update_due_date();
 
     // Fill task.completed_days with recent completions
     m_db.load_habit_completion_preview(task, now_str);
@@ -206,6 +242,8 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
         LOGE(TAG, "Failed to persist habit entry: %d", err);
         return false;
     }
+
+    emit modelChanged();
 }
 
 bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *dateIso8601)
@@ -224,6 +262,8 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         LOGE(TAG, "Failed to remove habit entry: %d", err);
         return false;
     }
+
+    emit modelChanged();
 }
 
 bool CalendarRepository::habitEntryExists(const char *taskUuid, const char *dateIso8601)

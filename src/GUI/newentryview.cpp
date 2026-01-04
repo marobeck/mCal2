@@ -160,12 +160,16 @@ void NewEntryView::onCreateClicked()
     int typeIndex = m_typeCombo->currentIndex();
     if (typeIndex == 0)
     {
+        t->status = TaskStatus::INCOMPLETE; // Notify that this is a task
+
         // Task: set due date
         qint64 secs = m_dueEdit->dateTime().toSecsSinceEpoch();
         t->due_date = static_cast<time_t>(secs);
     }
     else
     {
+        t->status = TaskStatus::HABIT; // Notify that this is a habit
+
         // Habit: build GoalSpec
         int mode = m_habitModeCombo->currentIndex();
         if (mode == 0)

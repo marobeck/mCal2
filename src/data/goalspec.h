@@ -71,8 +71,15 @@ public:
     }
 
     // Check if a given tm_wday (0 = Sunday, 6 = Saturday) is included
+    //* Only works for DayFrequency mode
     bool has_day(int tm_wday) const
     {
+        if (mode() != Mode::DayFrequency)
+        {
+            return false;
+        }
+
+        // Provide weekend flag from mask
         int weekday_flag = 1 << (6 - tm_wday); // Map weekday to flag mask
         return (weekday_flags() & weekday_flag) != 0;
     }

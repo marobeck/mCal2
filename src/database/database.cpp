@@ -476,7 +476,6 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
     const char *TAG = "DB::load_habit_completion_preview";
 
     size_t len = sizeof(task.completed_days) / sizeof(task.completed_days[0]);
-    LOGI(TAG, "Checking the last %zu habit completions for task <%s> from date %s", len, task.name, current_date_iso8601);
 
     // Recursive CTE to get last N days and check for habit entries
     const char *sql =
@@ -510,6 +509,7 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
         const unsigned char *date_text = sqlite3_column_text(stmt, 1); // "YYYY-MM-DD"
         int done = sqlite3_column_int(stmt, 2);                        // 0 or 1
 
+        /* Get time_t from date string
         if (date_text && done)
         {
             struct tm tm = {};
@@ -528,12 +528,11 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
         {
             task.completed_days[index] = 0;
         }
+        */
+        if (done)
+            task.completed_days[index] = TaskStatus::COMPLETE;
         ++index;
     }
-
-    // If for any reason rows < len, fill the rest with 0
-    for (; index < len; ++index)
-        task.completed_days[index] = 0;
 
     sqlite3_finalize(stmt);
 

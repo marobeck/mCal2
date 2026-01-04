@@ -47,7 +47,6 @@ void Task::update_due_date()
         return;
     }
 
-    // --- HABIT MODE ---
     time_t now = time(nullptr);
     time_t today_midnight = midnight(now);
 
@@ -55,6 +54,14 @@ void Task::update_due_date()
     localtime_r(&now, &local_tm);
     int wday = local_tm.tm_wday; // Sunday = 0
 
+    // Check if goal has already been met today
+    if (completed_days[0] == TaskStatus::COMPLETE) // Index 0 = today
+    {
+        due_date = 0; // clear due date
+        return;
+    }
+
+    // --- HABIT MODE ---
     // Convert to flag bit
     unsigned char day_flag = 0;
     switch (wday)
@@ -106,10 +113,24 @@ void Task::update_due_date()
     week_tm.tm_mday -= wday; // back to Sunday
     time_t week_start = mktime(&week_tm);
 
-    for (time_t t : completed_days)
+    // Count completions this week
+    for (size_t i = 0; i < sizeof(completed_days) / sizeof(completed_days[0]); ++i)
     {
-        if (t >= week_start)
-            completed_this_week++;
+        // Current day to weekday enum
+        int wday = (local_tm.tm_wday - i) % 7;
+
+        // Only count days within this week
+        struct tm day_tm = *localtime(&now);
+        day_tm.tm_hour = day_tm.tm_min = day_tm.tm_sec = 0;
+        day_tm.tm_mday -= i;
+        time_t day_time = mktime(&day_tm);
+        if (day_time < week_start)
+            break;
+
+        if (completed_days[i] == TaskStatus::COMPLETE)
+        {
+            ++completed_this_week;
+        }
     }
 
     if (completed_this_week < goal_spec.frequency())
@@ -257,6 +278,7 @@ inline float status_weight(TaskStatus s)
     case TaskStatus::INCOMPLETE:
         return 1.0f;
     case TaskStatus::IN_PROGRESS:
+    case TaskStatus::HABIT:
         return 0.8f;
     case TaskStatus::COMPLETE:
         return 0.0f;
