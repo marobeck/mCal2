@@ -42,10 +42,11 @@ NewEntryView::NewEntryView(QWidget *parent)
     m_timeblockCombo = new QComboBox(this);
     form->addRow("Timeblock:", m_timeblockCombo);
 
-    // Type dropdown
+    // Type dropdown (Task, Habit - Frequency, Habit - Weekday)
     m_typeCombo = new QComboBox(this);
-    m_typeCombo->addItem("Task");  // Index 0 = Task
-    m_typeCombo->addItem("Habit"); // Index 1 = Habit
+    m_typeCombo->addItem("Task");                 // Index 0 = Task
+    m_typeCombo->addItem("Habit (Frequency)");    // Index 1 = Habit (frequency)
+    m_typeCombo->addItem("Habit (Weekday)");      // Index 2 = Habit (weekday)
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NewEntryView::onTypeChanged);
     form->addRow("Type:", m_typeCombo);
 
@@ -58,41 +59,49 @@ NewEntryView::NewEntryView(QWidget *parent)
     m_priorityCombo->addItem("Very High", static_cast<int>(Priority::VERY_HIGH));
     form->addRow("Priority:", m_priorityCombo);
 
-    // Due date input
+    // Completion parameters group - contains due date (for Task), frequency, or weekday controls
+    QGroupBox *completionBox = new QGroupBox("Completion Parameters", this);
+    QVBoxLayout *completionLayout = new QVBoxLayout(completionBox);
+
+    // Due date row (for Task)
     m_dueEdit = new QDateTimeEdit(QDateTime::currentDateTime(), this);
     m_dueEdit->setCalendarPopup(true);
-    form->addRow("Due date:", m_dueEdit);
+    m_dueRowWidget = new QWidget(this);
+    QHBoxLayout *dueLayout = new QHBoxLayout(m_dueRowWidget);
+    dueLayout->setContentsMargins(0, 0, 0, 0);
+    dueLayout->addWidget(m_dueEdit, 1);
+    m_undatedCheck = new QCheckBox("Undated", this);
+    m_undatedCheck->setToolTip("If set, this task will have no due date");
+    m_undatedCheck->setChecked(false);
+    dueLayout->addWidget(m_undatedCheck, 0, Qt::AlignVCenter);
+    completionLayout->addWidget(m_dueRowWidget);
 
-    // Habit options group
-    QGroupBox *habitBox = new QGroupBox("Habit Options", this);
-    QVBoxLayout *habitLayout = new QVBoxLayout(habitBox);
+    // When 'Undated' is checked, disable the date picker and later store due_date=0
+    connect(m_undatedCheck, &QCheckBox::toggled, this, [this](bool checked) { m_dueEdit->setEnabled(!checked); });
 
-    m_habitModeCombo = new QComboBox(this);
-    m_habitModeCombo->addItem("Frequency");
-    m_habitModeCombo->addItem("Weekday");
-    connect(m_habitModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NewEntryView::onHabitModeChanged);
-    habitLayout->addWidget(m_habitModeCombo);
-
-    // Frequency input
-    QHBoxLayout *freqRow = new QHBoxLayout;
+    // Frequency input (for Habit - Frequency)
+    m_freqWidget = new QWidget(this);
+    QHBoxLayout *freqWidgetLayout = new QHBoxLayout(m_freqWidget);
+    freqWidgetLayout->setContentsMargins(0, 0, 0, 0);
     m_frequencySpin = new QSpinBox(this);
     m_frequencySpin->setRange(0, 127);
     m_frequencySpin->setValue(1);
-    freqRow->addWidget(new QLabel("Times per week:"));
-    freqRow->addWidget(m_frequencySpin);
-    habitLayout->addLayout(freqRow);
+    freqWidgetLayout->addWidget(new QLabel("Times per week:"));
+    freqWidgetLayout->addWidget(m_frequencySpin);
+    completionLayout->addWidget(m_freqWidget);
 
-    // Weekday checkboxes
-    QHBoxLayout *weekdayRow = new QHBoxLayout;
+    // Weekday checkboxes (for Habit - Weekday)
+    m_weekdayWidget = new QWidget(this);
+    QHBoxLayout *weekdayRow = new QHBoxLayout(m_weekdayWidget);
     const char *days[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
     for (int i = 0; i < 7; ++i)
     {
         m_weekdayChecks[i] = new QCheckBox(days[i], this);
         weekdayRow->addWidget(m_weekdayChecks[i]);
     }
-    habitLayout->addLayout(weekdayRow);
+    completionLayout->addWidget(m_weekdayWidget);
 
-    form->addRow(habitBox);
+    form->addRow(completionBox);
 
     layout->addLayout(form);
 
@@ -103,7 +112,6 @@ NewEntryView::NewEntryView(QWidget *parent)
 
     // Initialize UI state
     onTypeChanged(m_typeCombo->currentIndex());
-    onHabitModeChanged(m_habitModeCombo->currentIndex());
 }
 
 void NewEntryView::populateTimeblocks(const std::vector<Timeblock> &timeblocks)
@@ -118,23 +126,28 @@ void NewEntryView::populateTimeblocks(const std::vector<Timeblock> &timeblocks)
 
 void NewEntryView::onTypeChanged(int index)
 {
-    // 0 = Task, 1 = Habit
-    bool isHabit = (index == 1);
-    m_dueEdit->setVisible(!isHabit);
-    m_habitModeCombo->setVisible(isHabit);
-    // also adjust the group of habit controls
-    for (int i = 0; i < 7; ++i)
-        m_weekdayChecks[i]->setVisible(isHabit);
-    m_frequencySpin->setVisible(isHabit);
-}
-
-void NewEntryView::onHabitModeChanged(int index)
-{
-    // 0 = Frequency, 1 = Weekday
-    bool freq = (index == 0);
-    m_frequencySpin->setVisible(freq);
-    for (int i = 0; i < 7; ++i)
-        m_weekdayChecks[i]->setVisible(!freq);
+    // 0 = Task, 1 = Habit (Frequency), 2 = Habit (Weekday)
+    if (index == 0)
+    {
+        // Task: show due date row
+        if (m_dueRowWidget) m_dueRowWidget->setVisible(true);
+        if (m_freqWidget) m_freqWidget->setVisible(false);
+        if (m_weekdayWidget) m_weekdayWidget->setVisible(false);
+    }
+    else if (index == 1)
+    {
+        // Habit (Frequency)
+        if (m_dueRowWidget) m_dueRowWidget->setVisible(false);
+        if (m_freqWidget) m_freqWidget->setVisible(true);
+        if (m_weekdayWidget) m_weekdayWidget->setVisible(false);
+    }
+    else
+    {
+        // Habit (Weekday)
+        if (m_dueRowWidget) m_dueRowWidget->setVisible(false);
+        if (m_freqWidget) m_freqWidget->setVisible(false);
+        if (m_weekdayWidget) m_weekdayWidget->setVisible(true);
+    }
 }
 
 void NewEntryView::onCreateClicked()
@@ -163,16 +176,22 @@ void NewEntryView::onCreateClicked()
         t->status = TaskStatus::INCOMPLETE; // Notify that this is a task
 
         // Task: set due date
-        qint64 secs = m_dueEdit->dateTime().toSecsSinceEpoch();
-        t->due_date = static_cast<time_t>(secs);
+        if (m_undatedCheck && m_undatedCheck->isChecked())
+        {
+            t->due_date = 0;
+        }
+        else
+        {
+            qint64 secs = m_dueEdit->dateTime().toSecsSinceEpoch();
+            t->due_date = static_cast<time_t>(secs);
+        }
     }
     else
     {
         t->status = TaskStatus::HABIT; // Notify that this is a habit
 
-        // Habit: build GoalSpec
-        int mode = m_habitModeCombo->currentIndex();
-        if (mode == 0)
+        // Habit: build GoalSpec based on which type was selected
+        if (typeIndex == 1)
         {
             // Frequency
             uint8_t times = static_cast<uint8_t>(m_frequencySpin->value());
@@ -180,7 +199,7 @@ void NewEntryView::onCreateClicked()
         }
         else
         {
-            // weekday flags: GoalSpec weekday flags use mapping in goalspec.h
+            // Weekday-based
             uint8_t flags = 0;
             // Weekday checkboxes array: 0=Sun .. 6=Sat
             const Weekday mapping[7] = {Weekday::Sunday, Weekday::Monday, Weekday::Tuesday, Weekday::Wednesday, Weekday::Thursday, Weekday::Friday, Weekday::Saturday};

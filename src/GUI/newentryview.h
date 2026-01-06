@@ -33,7 +33,6 @@ signals:
 
 private slots:
     void onTypeChanged(int index);
-    void onHabitModeChanged(int index);
     void onCreateClicked();
 
 private:
@@ -44,9 +43,13 @@ private:
     QComboBox *m_priorityCombo = nullptr;
     QComboBox *m_typeCombo = nullptr; // Task or Habit
     QDateTimeEdit *m_dueEdit = nullptr;
+    QCheckBox *m_undatedCheck = nullptr;
 
+    // Widgets grouped under completion parameters
+    QWidget *m_dueRowWidget = nullptr;
+    QWidget *m_freqWidget = nullptr;
+    QWidget *m_weekdayWidget = nullptr;
     // Habit controls
-    QComboBox *m_habitModeCombo = nullptr; // Frequency or Weekday
     QSpinBox *m_frequencySpin = nullptr;   // 0-127
     QCheckBox *m_weekdayChecks[7];
 
