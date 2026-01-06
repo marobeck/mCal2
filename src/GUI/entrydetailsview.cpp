@@ -4,6 +4,8 @@
 
 #include <QVBoxLayout>
 #include <QString>
+#include <QHBoxLayout>
+#include <QPushButton>
 
 EntryDetailsView::EntryDetailsView(QWidget *parent)
     : QWidget(parent)
@@ -34,6 +36,35 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
 
     // Force everything to the top
     layout->addStretch();
+
+    // --- Action buttons at bottom ---
+    QHBoxLayout *btnRow = new QHBoxLayout;
+    m_deleteBtn = new QPushButton("Delete", this);
+    m_moveBtn = new QPushButton("Move", this);
+    m_editBtn = new QPushButton("Edit", this);
+
+    // Default disabled until a task is loaded
+    m_deleteBtn->setEnabled(false);
+    m_moveBtn->setEnabled(false);
+    m_editBtn->setEnabled(false);
+
+    btnRow->addWidget(m_deleteBtn);
+    btnRow->addWidget(m_moveBtn);
+    btnRow->addWidget(m_editBtn);
+    layout->addLayout(btnRow);
+
+    connect(m_deleteBtn, &QPushButton::clicked, this, [this]()
+            {
+        if (!m_currentTaskUuid.isEmpty())
+            emit deleteTaskRequested(m_currentTaskUuid); });
+    connect(m_moveBtn, &QPushButton::clicked, this, [this]()
+            {
+        if (!m_currentTaskUuid.isEmpty())
+            emit moveTaskRequested(m_currentTaskUuid); });
+    connect(m_editBtn, &QPushButton::clicked, this, [this]()
+            {
+        if (!m_currentTaskUuid.isEmpty())
+            emit editTaskRequested(m_currentTaskUuid); });
 }
 
 void EntryDetailsView::loadTask(const Task *task)
@@ -53,6 +84,10 @@ void EntryDetailsView::loadTask(const Task *task)
         m_priorityLabel->setText("");
         m_urgencyLabel->setText("");
         m_prereqLabel->setText("");
+        m_currentTaskUuid.clear();
+        m_deleteBtn->setEnabled(false);
+        m_moveBtn->setEnabled(false);
+        m_editBtn->setEnabled(false);
         return;
     }
 
@@ -104,4 +139,10 @@ void EntryDetailsView::loadTask(const Task *task)
         m_prereqLabel->setText(QString::fromUtf8(task->prereq->name));
     else
         m_prereqLabel->setText("");
+
+    // Track the currently-loaded task and enable actions
+    m_currentTaskUuid = task->uuid;
+    m_deleteBtn->setEnabled(true);
+    m_moveBtn->setEnabled(true);
+    m_editBtn->setEnabled(true);
 }

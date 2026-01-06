@@ -19,6 +19,10 @@
 #include <QIcon>
 #include <QSize>
 #include <QSpacerItem>
+#include <QMessageBox>
+#include <QInputDialog>
+#include <cstring>
+#include <string>
 
 /* -------------------------------------------------------------------------- */
 /*                                     GUI                                    */
@@ -121,6 +125,108 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     connect(newTimeblockView, &NewTimeblockView::timeblockCreated, this, &MainWindow::onTimeblockCreated);
 
     connect(repo, &CalendarRepository::modelChanged, this, &MainWindow::modelChanged);
+
+    // EntryDetailsView actions
+    connect(entryDetailsView, &EntryDetailsView::deleteTaskRequested, this, &MainWindow::onDeleteTaskRequested);
+    connect(entryDetailsView, &EntryDetailsView::moveTaskRequested, this, &MainWindow::onMoveTaskRequested);
+    connect(entryDetailsView, &EntryDetailsView::editTaskRequested, this, &MainWindow::onEditTaskRequested);
+}
+
+void MainWindow::onDeleteTaskRequested(const QString &taskUuid)
+{
+    const char *TAG = "MainWindow::onDeleteTaskRequested";
+    LOGI(TAG, "Delete requested for task %s", taskUuid.toUtf8().constData());
+
+    QMessageBox::StandardButton reply = QMessageBox::question(this, "Delete Task",
+                                                              "Are you sure you want to delete this task?",
+                                                              QMessageBox::Yes | QMessageBox::No);
+    if (reply != QMessageBox::Yes)
+        return;
+
+    // Call repository to remove task
+    if (!repo->removeTask(taskUuid.toUtf8().constData()))
+    {
+        LOGE(TAG, "Failed to remove task %s", taskUuid.toUtf8().constData());
+    }
+}
+
+void MainWindow::onMoveTaskRequested(const QString &taskUuid)
+{
+    const char *TAG = "MainWindow::onMoveTaskRequested";
+    LOGI(TAG, "Move requested for task %s", taskUuid.toUtf8().constData());
+
+    // Build list of timeblock names
+    const auto &tbs = repo->timeblocks();
+    if (tbs.empty())
+    {
+        QMessageBox::information(this, "Move Task", "No timeblocks available to move to.");
+        return;
+    }
+
+    QStringList items;
+    for (const auto &tb : tbs)
+        items << QString(tb.name);
+
+    bool ok = false;
+    QString chosen = QInputDialog::getItem(this, "Move Task", "Select destination timeblock:", items, 0, false, &ok);
+    if (!ok || chosen.isEmpty())
+        return;
+
+    // Find selected timeblock UUID
+    const char *destUuid = nullptr;
+    std::string cname = chosen.toStdString();
+    for (const auto &tb : tbs)
+    {
+        if (cname == tb.name)
+        {
+            destUuid = tb.uuid;
+            break;
+        }
+    }
+    if (!destUuid)
+    {
+        LOGE(TAG, "Selected timeblock not found: %s", chosen.toUtf8().constData());
+        return;
+    }
+
+    if (!repo->moveTask(taskUuid.toUtf8().constData(), destUuid))
+    {
+        LOGE(TAG, "Failed to move task %s to %s", taskUuid.toUtf8().constData(), destUuid);
+    }
+}
+
+void MainWindow::onEditTaskRequested(const QString &taskUuid)
+{
+    const char *TAG = "MainWindow::onEditTaskRequested";
+    LOGI(TAG, "Edit requested for task %s", taskUuid.toUtf8().constData());
+
+    // Find the Task in memory and pass a heap copy to NewEntryView via switchLeftPanel.
+    const Task *found = nullptr;
+    for (const auto &tb : repo->timeblocks())
+    {
+        for (const auto &t : tb.tasks)
+        {
+            if (std::strncmp(t.uuid, taskUuid.toUtf8().constData(), UUID_LEN) == 0)
+            {
+                found = &t;
+                break;
+            }
+        }
+        if (found)
+            break;
+    }
+
+    if (!found)
+    {
+        LOGE(TAG, "Task to edit not found: %s", taskUuid.toUtf8().constData());
+        return;
+    }
+
+    // Make a heap copy and switch to NewEntryView with the pointer attached in QVariant
+    Task *copy = new Task(*found);
+    QVariant v = QVariant::fromValue(static_cast<const Task *>(copy));
+    // TODO: Implement an edit entry view that differs from new entry view
+    switchLeftPanel(Scene::NewEntry, v);
 }
 
 void MainWindow::addLeftEdgeButton(const QIcon &icon, Scene scene, QVariant data)

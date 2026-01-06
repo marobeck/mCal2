@@ -4,6 +4,7 @@
 #include <time.h>
 #include <algorithm>
 #include <numeric>
+#include <cstring>
 
 /* -------------------------------------------------------------------------- */
 /*                                Constructors                                */
@@ -190,7 +191,7 @@ bool CalendarRepository::removeTask(const char *taskUuid)
     {
         auto &tasks = tb.tasks;
         auto it = std::find_if(tasks.begin(), tasks.end(), [taskUuid](const Task &t)
-                               { return strcmp(t.uuid, taskUuid) == 0; });
+                               { return std::strncmp(t.uuid, taskUuid, UUID_LEN) == 0; });
         if (it != tasks.end())
         {
             tasks.erase(it);
@@ -235,7 +236,7 @@ bool CalendarRepository::updateTask(const Task &task)
         for (size_t i = 0; i < tb.tasks.size(); i++)
         {
             Task &t = tb.tasks[i];
-            if (strcmp(t.uuid, task.uuid) == 0)
+            if (std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0)
             {
                 existingTask = &t;
                 parentTimeblock = &tb;
@@ -268,7 +269,7 @@ bool CalendarRepository::updateTask(const Task &task)
         float u = parentTimeblock->tasks[i].get_urgency();
         if (taskUrgency > u || u < 0.00001f)
         {
-            if (i == taskIdx)
+            if (i == taskIdx && parentTimeblock->tasks.size() > 1)
             {
                 // No move needed
                 // Update existing task data
@@ -290,6 +291,77 @@ bool CalendarRepository::updateTask(const Task &task)
     return true;
 }
 
+bool CalendarRepository::moveTask(const char *taskUuid, const char *timeblockUuid)
+{
+    const char *TAG = "CalendarRepository::moveTask";
+    LOGI(TAG, "Moving task with UUID <%s> to timeblock UUID <%s>", taskUuid, timeblockUuid);
+
+    // Find task in current timeblock
+    Timeblock *currentTb = nullptr;
+    std::vector<Task>::iterator taskIt; // Task location in currentTb
+    Task movingTask;
+    for (auto &tb : m_timeblocks)
+    {
+        taskIt = std::find_if(tb.tasks.begin(), tb.tasks.end(), [taskUuid](const Task &t)
+                              { return std::strncmp(t.uuid, taskUuid, UUID_LEN) == 0; });
+        if (taskIt != tb.tasks.end())
+        {
+            movingTask = *taskIt;
+            currentTb = &tb;
+            // tb.tasks.erase(taskIt); // Remove from current timeblock
+            break;
+        }
+    }
+    if (!currentTb)
+    {
+        LOGE(TAG, "Task with UUID <%s> not found", taskUuid);
+        return false;
+    }
+
+    // Update task's timeblock_uuid
+    strncpy(movingTask.timeblock_uuid, timeblockUuid, UUID_LEN);
+
+    // Update in database
+    try
+    {
+        m_db.update_task(movingTask);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to update task in database: %d", err);
+        return false;
+    }
+
+    // Insert into new timeblock in memory
+    for (auto &tb : m_timeblocks)
+    {
+        if (std::strncmp(tb.uuid, timeblockUuid, UUID_LEN) == 0)
+        {
+            // Insert based on urgency
+            float taskUrgency = movingTask.get_urgency();
+            for (size_t i = 0; i < tb.tasks.size(); i++)
+            {
+                if (taskUrgency > tb.tasks[i].get_urgency())
+                {
+                    tb.tasks.insert(tb.tasks.begin() + i, movingTask);
+                    currentTb->tasks.erase(taskIt); // Remove from old timeblock
+                    LOGI(TAG, "Inserted moved task <%s> at position %zu in timeblock <%s>", movingTask.name, i, tb.name);
+                    emit modelChanged();
+                    return true;
+                }
+            }
+            tb.tasks.push_back(movingTask);
+            currentTb->tasks.erase(taskIt); // Remove from old timeblock
+            LOGI(TAG, "Appended moved task <%s> at end of timeblock <%s>", movingTask.name, tb.name);
+            emit modelChanged();
+            return true;
+        }
+    }
+
+    LOGE(TAG, "Destination timeblock with UUID <%s> not found", timeblockUuid);
+    return false;
+}
+
 /* --------------------------------- Habits --------------------------------- */
 
 bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso8601)
@@ -309,7 +381,7 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
         {
             for (size_t i = 0; i < tb.tasks.size(); ++i)
             {
-                if (strcmp(tb.tasks[i].uuid, taskUuid) == 0)
+                if (std::strncmp(tb.tasks[i].uuid, taskUuid, UUID_LEN) == 0)
                 {
                     parentTb = &tb;
                     foundTask = &tb.tasks[i];
@@ -376,7 +448,7 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         {
             for (size_t i = 0; i < tb.tasks.size(); ++i)
             {
-                if (strcmp(tb.tasks[i].uuid, taskUuid) == 0)
+                if (std::strncmp(tb.tasks[i].uuid, taskUuid, UUID_LEN) == 0)
                 {
                     parentTb = &tb;
                     foundTask = &tb.tasks[i];
@@ -515,7 +587,7 @@ bool CalendarRepository::removeTimeblock(const char *timeblockUuid)
 
     // Find and remove from in-memory model
     auto it = std::find_if(m_timeblocks.begin(), m_timeblocks.end(), [timeblockUuid](const Timeblock &tb)
-                           { return strcmp(tb.uuid, timeblockUuid) == 0; });
+                           { return std::strncmp(tb.uuid, timeblockUuid, UUID_LEN) == 0; });
     if (it != m_timeblocks.end())
     {
         m_timeblocks.erase(it);
@@ -549,7 +621,7 @@ bool CalendarRepository::updateTimeblock(const Timeblock &tb)
     Timeblock *existingTb = nullptr;
     for (auto &t : m_timeblocks)
     {
-        if (strcmp(t.uuid, tb.uuid) == 0)
+        if (std::strncmp(t.uuid, tb.uuid, UUID_LEN) == 0)
         {
             existingTb = &t;
             break;

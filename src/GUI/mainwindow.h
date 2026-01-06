@@ -57,6 +57,10 @@ public slots:
     void onTaskCreated(Task *task, int timeblockIndex);
     void onTimeblockCreated(Timeblock *timeblock);
     void modelChanged();
+    // Entry details actions
+    void onDeleteTaskRequested(const QString &taskUuid);
+    void onMoveTaskRequested(const QString &taskUuid);
+    void onEditTaskRequested(const QString &taskUuid);
 
 public:
     // Access to memory and database

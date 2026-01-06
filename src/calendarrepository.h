@@ -31,9 +31,10 @@ public:
 
     /* ------------------ Modifiers (update both memory and DB) ----------------- */
     // Tasks
-    bool addTask(Task &task, size_t timeblockIndex); // returns success
-    bool removeTask(const char *taskUuid);
-    bool updateTask(const Task &task); // persist updated task
+    bool addTask(Task &task, size_t timeblockIndex);                // returns success
+    bool removeTask(const char *taskUuid);                          // Delete task by UUID
+    bool updateTask(const Task &task);                              // persist updated task
+    bool moveTask(const char *taskUuid, const char *timeblockUuid); // move task to different timeblock
     // Habits
     bool addHabitEntry(const char *taskUuid, const char *dateIso8601);
     bool addHabitEntry(const char *taskUuid, time_t date);
