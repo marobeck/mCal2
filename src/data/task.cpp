@@ -278,6 +278,7 @@ inline float status_weight(TaskStatus s)
     case TaskStatus::INCOMPLETE:
         return 1.0f;
     case TaskStatus::IN_PROGRESS:
+        return 1.3f;
     case TaskStatus::HABIT:
         return 0.8f;
     case TaskStatus::COMPLETE:
