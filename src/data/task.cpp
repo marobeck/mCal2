@@ -291,7 +291,7 @@ inline float status_weight(TaskStatus s)
  */
 inline float compute_deadline_pressure(time_t now, time_t due)
 {
-    const float K = 7.0f;
+    const float K = 70.0f;
     const float epsilon = 1.0f / 60.0f; // one minute
 
     std::time_t seconds_left = difftime(due, now);
@@ -306,8 +306,7 @@ inline float compute_deadline_pressure(time_t now, time_t due)
 float Task::get_urgency() const
 {
     // Constants
-    const float K = 7.0f; // Deadline pressure constant
-    const float C = 0.8f; // Undue penalty constant
+    const float C = 0.8f; // Undated pressure constant
 
     if (priority == Priority::NONE)
     {
