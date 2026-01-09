@@ -110,11 +110,11 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         // This keeps the combo compact and visually an icon-only status marker.
         statusDrop->setStyleSheet(
             "QComboBox { border: none; background: transparent; padding: 0px; }"
-            "QComboBox::down-arrow { image: none; }"
-        );
+            "QComboBox::down-arrow { image: none; }");
         statusDrop->addItem(makeColorIcon(QColor(0, 122, 255), iconSize), "");
         statusDrop->addItem(makeColorIcon(QColor(204, 0, 0), iconSize), "");
         statusDrop->addItem(makeColorIcon(QColor(24, 160, 0), iconSize), "");
+        statusDrop->addItem(makeColorIcon(QColor(255, 215, 1), iconSize), "");
 
         // Map TimeblockStatus -> combo index
         int tbStatusIndex = 0;
@@ -129,6 +129,9 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         case TimeblockStatus::DONE:
             tbStatusIndex = 2;
             break;
+        case TimeblockStatus::PINNED:
+            tbStatusIndex = 3;
+            break;
         }
         statusDrop->setCurrentIndex(tbStatusIndex);
 
@@ -142,8 +145,10 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
                         newTb.status = TimeblockStatus::ONGOING;
                     else if (idx == 1)
                         newTb.status = TimeblockStatus::STOPPED;
-                    else
+                    else if (idx == 2)
                         newTb.status = TimeblockStatus::DONE;
+                    else if (idx == 3)
+                        newTb.status = TimeblockStatus::PINNED;
 
                     // Persist and refresh views
                     if (repo)

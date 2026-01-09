@@ -108,6 +108,11 @@ void CalendarRepository::sortTimeblocks()
     {
         if (tb.tasks.empty())
             return 0.0f;
+
+        // Add bonus for pinned timeblocks, so they always show first but keep order among themselves
+        if (tb.status == TimeblockStatus::PINNED)
+            return tb.tasks[0].get_urgency() * tb.status_weight(tb.status) + 1000.0f;
+
         return tb.tasks[0].get_urgency() * tb.status_weight(tb.status);
     };
 

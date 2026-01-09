@@ -22,7 +22,11 @@ enum class TimeblockStatus
      * Timeblock completed as scheduled
      * Timeblock is moved to archive upon completion
      */
-    DONE = 2
+    DONE = 2,
+    /**
+     * Timeblock is pinned to top of list, so always shows first
+     */
+    PINNED = 3
 };
 
 class Timeblock
