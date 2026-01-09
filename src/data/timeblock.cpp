@@ -59,3 +59,18 @@ bool Timeblock::timeblock_is_active(time_t now)
                (seconds_today <= day_start + duration);
     }
 }
+
+// Get weight multiplier for status
+float Timeblock::status_weight(TimeblockStatus s) const
+{
+    switch (s)
+    {
+    case TimeblockStatus::ONGOING:
+        return 1.0f;
+    case TimeblockStatus::STOPPED:
+        return 0.1f; // Near zero urgency, but still present in case all other tasks are completed
+    case TimeblockStatus::DONE:
+        return 0.0f;
+    }
+    return 0.0f;
+}

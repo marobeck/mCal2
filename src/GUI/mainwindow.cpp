@@ -352,6 +352,8 @@ void MainWindow::modelChanged()
     const char *TAG = "MainWindow::modelChanged";
     LOGI(TAG, "Calendar model has changed; updating views...");
 
+    // Update tasklist order
+    repo->sortTimeblocks();
     // Refresh the TodoListView with the new model snapshot
     todoListView->updateTasklists(repo->timeblocks());
     // Also update NewEntryView's timeblock list

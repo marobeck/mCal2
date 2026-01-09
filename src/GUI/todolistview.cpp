@@ -8,6 +8,14 @@
 #include <QLabel>
 #include <QScrollArea>
 #include <QVariant>
+#include <QComboBox>
+#include <QPainter>
+#include <QPixmap>
+#include <QColor>
+#include <QSizePolicy>
+
+// --- Tools ---
+#include "helper.h"
 
 // --- Widgets ---
 #include "taskitemwidget.h"
@@ -49,10 +57,6 @@ TodoListView::TodoListView(QWidget *parent, CalendarRepository *dataRepo)
     setLayout(rootLayout);
 }
 
-void TodoListView::updateTasklist(const Timeblock &tb)
-{
-}
-
 void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
 {
     const char *TAG = "TodoListView::updateTasklists";
@@ -73,7 +77,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
     // Add lists to container instead of root directly
     for (const auto &tb : timeblocks)
     {
-        LOGI(TAG, "Adding timeblock: %s with %zu tasks.", tb.name, tb.tasks.size());
+        // LOGI(TAG, "Adding timeblock: %s with %zu tasks.", tb.name, tb.tasks.size());
 
         // --- Container for label + list ---
         QWidget *column = new QWidget(this);
@@ -81,16 +85,81 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         colLayout->setContentsMargins(0, 0, 0, 0);
         colLayout->setSpacing(4);
 
-        // --- Label at top ---
+        // --- Label and compact status drop down at top ---
+
+        QWidget *titleRow = new QWidget(this);
+        QHBoxLayout *titleRowLayout = new QHBoxLayout(titleRow);
+        titleRowLayout->setContentsMargins(0, 0, 0, 0);
+        titleRowLayout->setSpacing(6);
+
         QLabel *title = new QLabel(QString(tb.name), this);
-        title->setAlignment(Qt::AlignHCenter);
-        title->setStyleSheet("font-weight: bold; font-size: 16px;");
-        colLayout->addWidget(title);
+        title->setStyleSheet("font-weight: bold; font-size: 18px;");
+        // Make the title expand and center in the available space to the left
+        // of the status icon. The status combobox below uses a fixed size.
+        title->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+        title->setAlignment(Qt::AlignCenter);
+
+        QComboBox *statusDrop = new QComboBox(this);
+        // Small icon-only combo: Ongoing (blue), Stopped (red), Done (green)
+        const QSize iconSize(12, 12);
+        statusDrop->setIconSize(iconSize);
+        statusDrop->setFixedWidth(30);
+        statusDrop->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        statusDrop->setEditable(false);
+        // Hide the standard drop-down arrow so the small colored icon isn't obscured.
+        // This keeps the combo compact and visually an icon-only status marker.
+        statusDrop->setStyleSheet(
+            "QComboBox { border: none; background: transparent; padding: 0px; }"
+            "QComboBox::down-arrow { image: none; }"
+        );
+        statusDrop->addItem(makeColorIcon(QColor(0, 122, 255), iconSize), "");
+        statusDrop->addItem(makeColorIcon(QColor(204, 0, 0), iconSize), "");
+        statusDrop->addItem(makeColorIcon(QColor(24, 160, 0), iconSize), "");
+
+        // Map TimeblockStatus -> combo index
+        int tbStatusIndex = 0;
+        switch (tb.status)
+        {
+        case TimeblockStatus::ONGOING:
+            tbStatusIndex = 0;
+            break;
+        case TimeblockStatus::STOPPED:
+            tbStatusIndex = 1;
+            break;
+        case TimeblockStatus::DONE:
+            tbStatusIndex = 2;
+            break;
+        }
+        statusDrop->setCurrentIndex(tbStatusIndex);
+
+        // When the user changes the small status dropdown, persist via repository.
+        // Capture a copy of the timeblock (`tb`) so we can update its status and call repo.
+        connect(statusDrop, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this, tb](int idx)
+                {
+                    Timeblock newTb = tb;
+                    // Map combo index to TimeblockStatus (same ordering)
+                    if (idx == 0)
+                        newTb.status = TimeblockStatus::ONGOING;
+                    else if (idx == 1)
+                        newTb.status = TimeblockStatus::STOPPED;
+                    else
+                        newTb.status = TimeblockStatus::DONE;
+
+                    // Persist and refresh views
+                    if (repo)
+                        repo->updateTimeblock(newTb); });
+
+        // Add title (expanding) first, then the fixed-size status widget to the right.
+        statusDrop->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+        titleRowLayout->addWidget(title);
+        titleRowLayout->addWidget(statusDrop);
+
+        colLayout->addWidget(titleRow);
 
         // --- Todo list ---
         QListWidget *list = new QListWidget(this);
         list->setSelectionMode(QAbstractItemView::SingleSelection);
-        list->setMinimumWidth(200);
+        list->setMinimumWidth(300);
         connect(list, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
 
         for (auto &task : tb.tasks)

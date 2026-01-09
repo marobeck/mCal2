@@ -50,7 +50,7 @@ TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
     m_nameLabel = new QLabel(m_task.name ? QString::fromUtf8(m_task.name) : QString("(untitled)"), this);
     QFont nameFont = m_nameLabel->font();
     nameFont.setBold(true);
-    nameFont.setPointSize(14);
+    nameFont.setPointSize(12);
     nameFont.setStrikeOut(completed);
     m_nameLabel->setFont(nameFont);
 

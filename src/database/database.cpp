@@ -109,7 +109,7 @@ void Database::insert_timeblock(const Timeblock &tb)
     }
 
     sqlite3_bind_text(stmt, 1, tb.uuid, -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 2, tb.status);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(tb.status));
     sqlite3_bind_text(stmt, 3, tb.name, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 4, tb.desc, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 5, tb.day_frequency.to_sql());
@@ -147,7 +147,7 @@ void Database::load_timeblocks(std::vector<Timeblock> &timeblocks)
     {
         Timeblock tb;
         strncpy(tb.uuid, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
-        tb.status = static_cast<TIMEBLOCK_STATUS>(sqlite3_column_int(stmt, 1));
+        tb.status = static_cast<TimeblockStatus>(sqlite3_column_int(stmt, 1));
         tb.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
         tb.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
         tb.day_frequency = GoalSpec::from_sql(sqlite3_column_int(stmt, 4));
@@ -186,7 +186,7 @@ void Database::update_timeblock(const Timeblock &tb)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_int(stmt, 1, tb.status);
+    sqlite3_bind_int(stmt, 1, static_cast<int>(tb.status));
     sqlite3_bind_text(stmt, 2, tb.name, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 3, tb.desc, -1, SQLITE_STATIC);
     sqlite3_bind_int(stmt, 4, tb.day_frequency.to_sql());

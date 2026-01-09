@@ -31,6 +31,8 @@ void CalendarRepository::loadAll()
     // Load timeblocks from database
     m_db.load_timeblocks(m_timeblocks);
 
+    sortTimeblocks();
+
     // Load tasks from timeblocks
     for (auto &tb : m_timeblocks)
     {
@@ -50,22 +52,6 @@ void CalendarRepository::loadAll()
             }
         }
     }
-
-    // After tasks are sorted within each timeblock, sort timeblocks by the
-    // average urgency of their top-3 tasks (higher average comes first).
-    auto top3_avg = [](const Timeblock &tb) -> float
-    {
-        size_t n = std::min<size_t>(3, tb.tasks.size());
-        if (n == 0)
-            return 0.0f;
-        float sum = 0.0f;
-        for (size_t i = 0; i < n; ++i)
-            sum += tb.tasks[i].get_urgency();
-        return sum / static_cast<float>(n);
-    };
-
-    std::sort(m_timeblocks.begin(), m_timeblocks.end(), [&](const Timeblock &a, const Timeblock &b)
-              { return top3_avg(a) > top3_avg(b); });
 }
 
 void CalendarRepository::habitCompletionPreview(Task &task)
@@ -115,9 +101,33 @@ void CalendarRepository::habitCompletionPreview(Task &task)
 /*                              In-memory access                              */
 /* -------------------------------------------------------------------------- */
 
+void CalendarRepository::sortTimeblocks()
+{
+    // Sort timeblocks by urgency of their top task
+    auto top_task_urgency = [](const Timeblock &tb) -> float
+    {
+        if (tb.tasks.empty())
+            return 0.0f;
+        return tb.tasks[0].get_urgency() * tb.status_weight(tb.status);
+    };
+
+    std::sort(m_timeblocks.begin(), m_timeblocks.end(), [&](const Timeblock &a, const Timeblock &b)
+              { return top_task_urgency(a) > top_task_urgency(b); });
+}
+
 const std::vector<Timeblock> &CalendarRepository::timeblocks() const
 {
     return m_timeblocks;
+}
+
+void CalendarRepository::sortTasks()
+{
+    // Sort tasks within each timeblock by urgency
+    for (auto &tb : m_timeblocks)
+    {
+        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
+                  { return a.get_urgency() > b.get_urgency(); });
+    }
 }
 
 /* -------------------------------------------------------------------------- */

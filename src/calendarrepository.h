@@ -19,7 +19,9 @@ public:
     CalendarRepository();
     ~CalendarRepository();
 
-    // In-memory access
+    /* ---------------------------- In memory access ---------------------------- */
+    void sortTimeblocks(); // sorts timeblocks in memory
+    void sortTasks();      // sorts tasks within each timeblock in memory (not timeblocks)
     const std::vector<Timeblock> &timeblocks() const;
 
     /* ------------------------------ Load from DB ------------------------------ */

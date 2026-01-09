@@ -7,23 +7,23 @@
 #include "goalspec.h"
 #include "task.h"
 
-typedef enum
+enum class TimeblockStatus
 {
     /**
      * Timeblock is in use
      */
-    ONGOING,
+    ONGOING = 0,
     /**
      * Timeblock was manually stopped before completion
      * Timeblock remains in active list but has urgancy of 0
      */
-    STOPPED,
+    STOPPED = 1,
     /**
      * Timeblock completed as scheduled
      * Timeblock is moved to archive upon completion
      */
-    DONE
-} TIMEBLOCK_STATUS;
+    DONE = 2
+};
 
 class Timeblock
 {
@@ -41,7 +41,7 @@ public:
 
     char *name, *desc;
     std::vector<Task> tasks;
-    TIMEBLOCK_STATUS status = ONGOING;
+    TimeblockStatus status = TimeblockStatus::ONGOING;
 
     Timeblock() = default;
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);
@@ -52,7 +52,7 @@ public:
     {
         // Notify task of its parent timeblock
         e.set_timeblock_uuid(uuid);
-        
+
         tasks.push_back(e);
     }
 
@@ -64,4 +64,9 @@ public:
      * @return True if time is within the timeblock period, false if otherwise
      */
     bool timeblock_is_active(time_t time);
+
+    /**
+     * Get weight multiplier for status
+     */
+    float status_weight(TimeblockStatus s) const;
 };
