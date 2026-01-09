@@ -272,13 +272,12 @@ void Task::set_timeblock_uuid(const char *tb_uuid)
  */
 inline float status_weight(TaskStatus s)
 {
-    // Prioritize creating new tasks over completing existing ones
     switch (s)
     {
     case TaskStatus::INCOMPLETE:
         return 1.0f;
     case TaskStatus::IN_PROGRESS:
-        return 1.3f;
+        return 1.5f; // Finish what you started
     case TaskStatus::HABIT:
         return 0.8f;
     case TaskStatus::COMPLETE:
