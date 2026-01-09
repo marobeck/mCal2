@@ -15,7 +15,7 @@
 #include <QSizePolicy>
 
 // --- Tools ---
-#include "helper.h"
+#include "guihelper.h"
 
 // --- Widgets ---
 #include "taskitemwidget.h"

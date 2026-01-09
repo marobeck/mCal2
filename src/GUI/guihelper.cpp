@@ -1,4 +1,4 @@
-#include "helper.h"
+#include "guihelper.h"
 
 #include <QPainter>
 
