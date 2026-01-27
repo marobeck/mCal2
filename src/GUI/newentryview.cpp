@@ -44,9 +44,9 @@ NewEntryView::NewEntryView(QWidget *parent)
 
     // Type dropdown (Task, Habit - Frequency, Habit - Weekday)
     m_typeCombo = new QComboBox(this);
-    m_typeCombo->addItem("Task");                 // Index 0 = Task
-    m_typeCombo->addItem("Habit (Frequency)");    // Index 1 = Habit (frequency)
-    m_typeCombo->addItem("Habit (Weekday)");      // Index 2 = Habit (weekday)
+    m_typeCombo->addItem("Task");              // Index 0 = Task
+    m_typeCombo->addItem("Habit (Frequency)"); // Index 1 = Habit (frequency)
+    m_typeCombo->addItem("Habit (Weekday)");   // Index 2 = Habit (weekday)
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NewEntryView::onTypeChanged);
     form->addRow("Type:", m_typeCombo);
 
@@ -57,6 +57,7 @@ NewEntryView::NewEntryView(QWidget *parent)
     m_priorityCombo->addItem("Medium", static_cast<int>(Priority::MEDIUM));
     m_priorityCombo->addItem("High", static_cast<int>(Priority::HIGH));
     m_priorityCombo->addItem("Very High", static_cast<int>(Priority::VERY_HIGH));
+    m_priorityCombo->setCurrentIndex(2); // Default to Medium
     form->addRow("Priority:", m_priorityCombo);
 
     // Completion parameters group - contains due date (for Task), frequency, or weekday controls
@@ -77,7 +78,8 @@ NewEntryView::NewEntryView(QWidget *parent)
     completionLayout->addWidget(m_dueRowWidget);
 
     // When 'Undated' is checked, disable the date picker and later store due_date=0
-    connect(m_undatedCheck, &QCheckBox::toggled, this, [this](bool checked) { m_dueEdit->setEnabled(!checked); });
+    connect(m_undatedCheck, &QCheckBox::toggled, this, [this](bool checked)
+            { m_dueEdit->setEnabled(!checked); });
 
     // Frequency input (for Habit - Frequency)
     m_freqWidget = new QWidget(this);
@@ -130,23 +132,32 @@ void NewEntryView::onTypeChanged(int index)
     if (index == 0)
     {
         // Task: show due date row
-        if (m_dueRowWidget) m_dueRowWidget->setVisible(true);
-        if (m_freqWidget) m_freqWidget->setVisible(false);
-        if (m_weekdayWidget) m_weekdayWidget->setVisible(false);
+        if (m_dueRowWidget)
+            m_dueRowWidget->setVisible(true);
+        if (m_freqWidget)
+            m_freqWidget->setVisible(false);
+        if (m_weekdayWidget)
+            m_weekdayWidget->setVisible(false);
     }
     else if (index == 1)
     {
         // Habit (Frequency)
-        if (m_dueRowWidget) m_dueRowWidget->setVisible(false);
-        if (m_freqWidget) m_freqWidget->setVisible(true);
-        if (m_weekdayWidget) m_weekdayWidget->setVisible(false);
+        if (m_dueRowWidget)
+            m_dueRowWidget->setVisible(false);
+        if (m_freqWidget)
+            m_freqWidget->setVisible(true);
+        if (m_weekdayWidget)
+            m_weekdayWidget->setVisible(false);
     }
     else
     {
         // Habit (Weekday)
-        if (m_dueRowWidget) m_dueRowWidget->setVisible(false);
-        if (m_freqWidget) m_freqWidget->setVisible(false);
-        if (m_weekdayWidget) m_weekdayWidget->setVisible(true);
+        if (m_dueRowWidget)
+            m_dueRowWidget->setVisible(false);
+        if (m_freqWidget)
+            m_freqWidget->setVisible(false);
+        if (m_weekdayWidget)
+            m_weekdayWidget->setVisible(true);
     }
 }
 

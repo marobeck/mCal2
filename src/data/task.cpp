@@ -29,13 +29,14 @@ Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_
 /*                                Handle habit                                */
 /* -------------------------------------------------------------------------- */
 
+// The end of day time for a given time t
 static inline time_t midnight(time_t t)
 {
     struct tm tm_date;
     localtime_r(&t, &tm_date);
-    tm_date.tm_hour = 0;
-    tm_date.tm_min = 0;
-    tm_date.tm_sec = 0;
+    tm_date.tm_hour = 23;
+    tm_date.tm_min = 59;
+    tm_date.tm_sec = 59;
     return mktime(&tm_date);
 }
 

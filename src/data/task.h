@@ -10,9 +10,9 @@
 enum class Priority
 {
     NONE = -1,
-    VERY_LOW = 0,
-    LOW = 2,
-    MEDIUM = 3,
+    VERY_LOW = 1,
+    LOW = 3,
+    MEDIUM = 4,
     HIGH = 5,
     VERY_HIGH = 7
 };
