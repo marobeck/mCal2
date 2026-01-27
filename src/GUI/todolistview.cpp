@@ -165,6 +165,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         QListWidget *list = new QListWidget(this);
         list->setSelectionMode(QAbstractItemView::SingleSelection);
         list->setMinimumWidth(300);
+        list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         connect(list, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
 
         for (auto &task : tb.tasks)
