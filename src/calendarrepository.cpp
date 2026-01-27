@@ -277,6 +277,9 @@ bool CalendarRepository::updateTask(const Task &task)
         return false;
     }
 
+    // Update existing task data
+    *existingTask = task;
+
     // Adjust location in timeblock based on urgency
     float taskUrgency = task.get_urgency();
     for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
@@ -287,8 +290,6 @@ bool CalendarRepository::updateTask(const Task &task)
             if (i == taskIdx && parentTimeblock->tasks.size() > 1)
             {
                 // No move needed
-                // Update existing task data
-                *existingTask = task;
                 break;
             }
             // Move task to this position
