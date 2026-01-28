@@ -45,6 +45,8 @@ public:
 
     char *name, *desc;
     std::vector<Task> tasks;
+    std::vector<Task> archived_tasks; // Completed tasks moved here
+
     TimeblockStatus status = TimeblockStatus::ONGOING;
 
     Timeblock() = default;
@@ -58,6 +60,14 @@ public:
         e.set_timeblock_uuid(uuid);
 
         tasks.push_back(e);
+    }
+
+    void append_archived(Task &e)
+    {
+        // Notify task of its parent timeblock
+        e.set_timeblock_uuid(uuid);
+
+        archived_tasks.push_back(e);
     }
 
     // --- Get data ---

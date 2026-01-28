@@ -287,6 +287,12 @@ void Database::load_tasks(Timeblock *timeblock)
 {
     const char *TAG = "DB::load_tasks";
 
+    if (!timeblock)
+    {
+        LOGE(TAG, "Null timeblock provided to load_tasks");
+        throw -1;
+    }
+
     const char *sql = "SELECT * FROM tasks WHERE timeblock_uuid = ?;";
     sqlite3_stmt *stmt;
 
@@ -310,7 +316,15 @@ void Database::load_tasks(Timeblock *timeblock)
         t.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 6));
         t.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 7));
 
-        timeblock->append(t);
+        // Sort between archive and active tasks
+        if (t.status == TaskStatus::COMPLETE)
+        {
+            timeblock->append_archived(t);
+        }
+        else
+        {
+            timeblock->append(t);
+        }
     }
 
     sqlite3_finalize(stmt);

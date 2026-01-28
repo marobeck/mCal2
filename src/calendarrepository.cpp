@@ -259,6 +259,17 @@ bool CalendarRepository::updateTask(const Task &task)
                 break;
             }
         }
+        for (size_t i = 0; i < tb.archived_tasks.size(); i++)
+        {
+            Task &t = tb.archived_tasks[i];
+            if (std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0)
+            {
+                existingTask = &t;
+                parentTimeblock = &tb;
+                taskIdx = i;
+                break;
+            }
+        }
     }
     if (!existingTask)
     {
@@ -277,6 +288,50 @@ bool CalendarRepository::updateTask(const Task &task)
         return false;
     }
 
+    // If completed move to archived tasks
+    if (task.status == TaskStatus::COMPLETE)
+    {
+        // Append to front of archived tasks
+        parentTimeblock->archived_tasks.push_back(task);
+        rotate(parentTimeblock->archived_tasks.rbegin(), parentTimeblock->archived_tasks.rbegin() + 1, parentTimeblock->archived_tasks.rend());
+
+        parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
+        LOGI(TAG, "Moved task <%s> to archived tasks in timeblock <%s>", task.name, parentTimeblock->name);
+        emit modelChanged();
+        return true;
+    }
+    // If uncompleted move back to main list
+    if (existingTask->status == TaskStatus::COMPLETE && task.status != TaskStatus::COMPLETE)
+    {
+        // Place task into correct position based on urgency
+        // Adjust location in timeblock based on urgency
+        float taskUrgency = task.get_urgency();
+        for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
+        {
+            float u = parentTimeblock->tasks[i].get_urgency();
+            if (taskUrgency > u || u < 0.00001f)
+            {
+                // Move task to this position
+                parentTimeblock->tasks.insert(parentTimeblock->tasks.begin() + i, task);
+                LOGI(TAG, "Moved task <%s> (%0.2f) to position %zu in timeblock <%s>", task.name, taskUrgency, i, parentTimeblock->name);
+                break;
+            }
+        }
+
+        // Remove from archived tasks
+        auto &archived = parentTimeblock->archived_tasks;
+        auto it = std::find_if(archived.begin(), archived.end(), [&task](const Task &t)
+                               { return std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0; });
+        if (it != archived.end())
+        {
+            archived.erase(it);
+        }
+        LOGI(TAG, "Restored task <%s> to active tasks in timeblock <%s>", task.name, parentTimeblock->name);
+        emit modelChanged();
+        return true;
+    }
+
+    // Otherwise task was and will remain in active tasks
     // Update existing task data
     *existingTask = task;
 

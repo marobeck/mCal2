@@ -13,6 +13,8 @@
 #include <QPixmap>
 #include <QColor>
 #include <QSizePolicy>
+#include <QPushButton>
+#include <QListWidget>
 
 // --- Tools ---
 #include "guihelper.h"
@@ -176,13 +178,90 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             item->setSizeHint(widget->sizeHint());
             list->addItem(item);
             list->setItemWidget(item, widget);
-            repo->habitCompletionPreview(const_cast<Task &>(task));
+            if (task.status == TaskStatus::HABIT)
+            {
+                repo->habitCompletionPreview(const_cast<Task &>(task));
+            }
 
             // --- Todo list widget handling ---
             connect(widget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
         }
 
         colLayout->addWidget(list);
+        colLayout->setStretchFactor(list, 1);
+
+        // --- Archived tasks (collapsed by default) ---
+        QWidget *archivedWrapper = new QWidget(this);
+        QVBoxLayout *archLayout = new QVBoxLayout(archivedWrapper);
+        archLayout->setContentsMargins(0, 0, 0, 0);
+        archLayout->setSpacing(4);
+
+        // Collapse button at top of archived section (visible when expanded)
+        QPushButton *collapseArchivedBtn = new QPushButton("VVV", archivedWrapper);
+        collapseArchivedBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        collapseArchivedBtn->setVisible(false);
+        archLayout->addWidget(collapseArchivedBtn);
+
+        // Archived list (hidden initially)
+        QListWidget *archivedList = new QListWidget(archivedWrapper);
+        archivedList->setSelectionMode(QAbstractItemView::SingleSelection);
+        archivedList->setMinimumWidth(300);
+        archivedList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        archivedList->setVisible(false);
+        archLayout->addWidget(archivedList);
+
+        // Populate archived list items
+        for (auto &at : tb.archived_tasks)
+        {
+            QListWidgetItem *aitem = new QListWidgetItem(archivedList);
+            TaskItemWidget *awidget = new TaskItemWidget(at);
+            aitem->setSizeHint(awidget->sizeHint());
+            archivedList->addItem(aitem);
+            archivedList->setItemWidget(aitem, awidget);
+            connect(awidget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
+        }
+
+        // Button shown when archived is collapsed; placed at bottom via stretch
+        QPushButton *showArchivedBtn = new QPushButton("^^^", this);
+        showArchivedBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+
+        // Add archived wrapper (hidden) and a spacer + button (button visible when collapsed)
+        colLayout->addWidget(archivedWrapper);
+        colLayout->addStretch();
+        colLayout->addWidget(showArchivedBtn);
+
+        // Handlers to toggle collapsed/expanded state
+        connect(showArchivedBtn, &QPushButton::clicked, this, [=]() {
+            // Expand: hide the show button, reveal archivedWrapper and archivedList
+            showArchivedBtn->setVisible(false);
+            archivedWrapper->setVisible(true);
+            archivedList->setVisible(true);
+            collapseArchivedBtn->setVisible(true);
+            // Give equal vertical space to active and archived lists
+            int listIndex = colLayout->indexOf(list);
+            int archIndex = colLayout->indexOf(archivedWrapper);
+            if (listIndex >= 0 && archIndex >= 0)
+            {
+                colLayout->setStretch(listIndex, 1);
+                colLayout->setStretch(archIndex, 1);
+            }
+        });
+
+        connect(collapseArchivedBtn, &QPushButton::clicked, this, [=]() {
+            // Collapse: hide wrapper, show the show button at bottom
+            archivedList->setVisible(false);
+            collapseArchivedBtn->setVisible(false);
+            archivedWrapper->setVisible(false);
+            showArchivedBtn->setVisible(true);
+            // Restore stretch so main list takes natural space
+            int listIndex = colLayout->indexOf(list);
+            int archIndex = colLayout->indexOf(archivedWrapper);
+            if (listIndex >= 0 && archIndex >= 0)
+            {
+                colLayout->setStretch(listIndex, 1);
+                colLayout->setStretch(archIndex, 0);
+            }
+        });
 
         // Track list for your backend
         todoLists.append(list);
