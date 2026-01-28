@@ -26,6 +26,4 @@ signals:
 
 private slots:
     void onCompletionChanged(int checkState);
-protected:
-    void resizeEvent(QResizeEvent *event) override;
 };

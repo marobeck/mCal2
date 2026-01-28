@@ -6,7 +6,6 @@
 #include <QHBoxLayout>
 #include <QCheckBox>
 #include <QFont>
-#include <QResizeEvent>
 #include <QFontMetrics>
 
 TaskItemWidget::TaskItemWidget(const Task &t, QWidget *parent)
@@ -94,25 +93,4 @@ void TaskItemWidget::onCompletionChanged(int checkState)
     m_nameLabel->setFont(f);
 
     emit completionToggled(m_task, checkState);
-}
-
-void TaskItemWidget::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-
-    // Compute available width for the name label: widget width minus checkbox and margins
-    int totalWidth = this->width();
-    int checkboxWidth = m_doneCheck ? m_doneCheck->sizeHint().width() : 24;
-    // Account for layout contents margins (set to 8 left + 8 right in constructor) and spacing
-    const int horizMargins = 16; // left+right
-    const int extraPadding = 80; // small buffer for spacing
-
-    // Available width for name label
-    int avail = totalWidth - checkboxWidth - horizMargins - extraPadding;
-    if (avail < 20)
-        avail = 20;
-
-    QFontMetrics fm(m_nameLabel->font());
-    QString elided = fm.elidedText(m_fullName, Qt::ElideRight, avail);
-    m_nameLabel->setText(elided);
 }
