@@ -55,6 +55,7 @@ public slots:
 
     // Run updates
     void onTaskCreated(Task *task, int timeblockIndex);
+    void onTaskEdited(Task *task);
     void onTimeblockCreated(Timeblock *timeblock);
     void modelChanged();
     // Entry details actions

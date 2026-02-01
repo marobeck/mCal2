@@ -1,4 +1,5 @@
 #include "newentryview.h"
+#include "log.h"
 
 #include <QVBoxLayout>
 #include <QLabel>
@@ -22,9 +23,9 @@ NewEntryView::NewEntryView(QWidget *parent)
     QVBoxLayout *layout = new QVBoxLayout(this);
 
     // Title
-    QLabel *title = new QLabel("New Task / Habit", this);
-    title->setStyleSheet("font-weight: bold; font-size: 18px;");
-    layout->addWidget(title);
+    m_title = new QLabel("New Task / Habit", this);
+    m_title->setStyleSheet("font-weight: bold; font-size: 18px;");
+    layout->addWidget(m_title);
 
     // --- Form ---
     QFormLayout *form = new QFormLayout;
@@ -35,7 +36,7 @@ NewEntryView::NewEntryView(QWidget *parent)
 
     // Description input
     m_descEdit = new QTextEdit(this);
-    m_descEdit->setFixedHeight(80);
+    m_descEdit->setFixedHeight(160);
     form->addRow("Description:", m_descEdit);
 
     // Timeblock dropdown
@@ -126,6 +127,108 @@ void NewEntryView::populateTimeblocks(const std::vector<Timeblock> &timeblocks)
     }
 }
 
+void NewEntryView::clearFields()
+{
+    m_editMode = false;
+    m_title->setText("New Task / Habit");
+
+    m_nameEdit->clear();
+    m_descEdit->clear();
+    m_priorityCombo->setCurrentIndex(2); // Medium
+    m_typeCombo->setCurrentIndex(0);     // Task
+    m_dueEdit->setDateTime(QDateTime::currentDateTime());
+    m_undatedCheck->setChecked(false);
+    m_timeblockCombo->setEnabled(true);
+}
+
+void NewEntryView::loadTaskForEditing(Task *task)
+{
+    const char *TAG = "NewEntryView::loadTaskForEditing";
+
+    LOGI(TAG, "Loading task for editing: %s", task->name ? task->name : "(null)");
+
+    if (!task)
+    {
+        LOGW(TAG, "Null task provided to loadTaskForEditing; clearing inputs.");
+        clearFields();
+        return;
+    }
+
+    // Note that scene is in edit mode
+    m_editMode = true;
+    m_editingTask = task;
+
+    m_title->setText("Edit Task / Habit");
+
+    // Populate fields
+    QString name = task->name ? QString::fromUtf8(task->name) : QString("");
+    m_nameEdit->setText(name);
+
+    QString desc = task->desc ? QString::fromUtf8(task->desc) : QString("");
+    m_descEdit->setText(desc);
+
+    // Disable timeblock selection during edit
+    m_timeblockCombo->setEnabled(false);
+
+    // Priority
+    int priorityIndex = 2; // Default to Medium
+    switch (task->priority)
+    {
+    case Priority::VERY_LOW:
+        priorityIndex = 0;
+        break;
+    case Priority::LOW:
+        priorityIndex = 1;
+        break;
+    case Priority::MEDIUM:
+        priorityIndex = 2;
+        break;
+    case Priority::HIGH:
+        priorityIndex = 3;
+        break;
+    case Priority::VERY_HIGH:
+        priorityIndex = 4;
+        break;
+    }
+    m_priorityCombo->setCurrentIndex(priorityIndex);
+
+    // Type and related fields
+    if (task->status == TaskStatus::HABIT)
+    {
+        // Determine if frequency-based or weekday-based habit
+        if (task->goal_spec.mode() == GoalSpec::Mode::Frequency)
+        {
+            m_typeCombo->setCurrentIndex(1); // Habit (Frequency)
+            m_frequencySpin->setValue(task->goal_spec.frequency());
+        }
+        else if (task->goal_spec.mode() == GoalSpec::Mode::DayFrequency)
+        {
+            m_typeCombo->setCurrentIndex(2); // Habit (Weekday)
+            // Set weekday checkboxes
+            for (int i = 0; i < 7; ++i)
+            {
+                Weekday dayFlag = static_cast<Weekday>(1 << i);
+                m_weekdayChecks[i]->setChecked(task->goal_spec.has_day(dayFlag));
+            }
+        }
+    }
+    else
+    {
+        m_typeCombo->setCurrentIndex(0); // Task
+        // Due date
+        if (task->due_date == 0)
+        {
+            m_undatedCheck->setChecked(true);
+        }
+        else
+        {
+            QDateTime dueDate = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(task->due_date));
+            m_dueEdit->setDateTime(dueDate);
+            m_undatedCheck->setChecked(false);
+        }
+    }
+}
+
 void NewEntryView::onTypeChanged(int index)
 {
     // 0 = Task, 1 = Habit (Frequency), 2 = Habit (Weekday)
@@ -166,6 +269,12 @@ void NewEntryView::onCreateClicked()
     // Build Task object
     Task *t = new Task();
 
+    // Set UUID
+    if (m_editMode)
+    {
+        memcpy(t->uuid, m_editingTask->uuid, UUID_LEN);
+    }
+
     // Set name and description
     QString name = m_nameEdit->text().trimmed();
     if (!name.isEmpty())
@@ -184,7 +293,14 @@ void NewEntryView::onCreateClicked()
     int typeIndex = m_typeCombo->currentIndex();
     if (typeIndex == 0)
     {
-        t->status = TaskStatus::INCOMPLETE; // Notify that this is a task
+        if (m_editMode && m_editingTask->status != TaskStatus::HABIT)
+        {
+            t->status = m_editingTask->status; // Preserve existing status
+        }
+        else
+        {
+            t->status = TaskStatus::INCOMPLETE; // New task starts as incomplete
+        }
 
         // Task: set due date
         if (m_undatedCheck && m_undatedCheck->isChecked())
@@ -224,7 +340,14 @@ void NewEntryView::onCreateClicked()
     }
 
     int tbIndex = m_timeblockCombo->currentIndex();
-    emit taskCreated(t, tbIndex);
+    if (m_editMode)
+    {
+        emit taskEdited(t); // Run update signal
+    }
+    else
+    {
+        emit taskCreated(t, tbIndex); // Run add signal
+    }
 
     // Clear inputs
     m_nameEdit->clear();

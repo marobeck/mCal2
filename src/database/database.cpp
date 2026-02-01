@@ -348,7 +348,7 @@ void Database::update_task(const Task &task)
      * status
      * goal_spec
      */
-    const char *sql = "UPDATE tasks SET timeblock_uuid = ?, name = ?, description = ?, due_date = ?, priority = ?, status = ?, goal_spec = ? WHERE uuid = ?;";
+    const char *sql = "UPDATE tasks SET name = ?, description = ?, due_date = ?, priority = ?, status = ?, goal_spec = ? WHERE uuid = ?;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -357,14 +357,13 @@ void Database::update_task(const Task &task)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_text(stmt, 1, task.timeblock_uuid, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, task.name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, task.desc, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 4, task.due_date);
-    sqlite3_bind_int(stmt, 5, static_cast<int>(task.priority));
-    sqlite3_bind_int(stmt, 6, static_cast<int>(task.status));
-    sqlite3_bind_int(stmt, 7, task.goal_spec.to_sql());
-    sqlite3_bind_text(stmt, 8, task.uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, task.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 3, task.due_date);
+    sqlite3_bind_int(stmt, 4, static_cast<int>(task.priority));
+    sqlite3_bind_int(stmt, 5, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 6, task.goal_spec.to_sql());
+    sqlite3_bind_text(stmt, 7, task.uuid, -1, SQLITE_STATIC);
 
     // Execute
     int rc = sqlite3_step(stmt);
@@ -555,5 +554,5 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
 
     sqlite3_finalize(stmt);
 
-    LOGI(TAG, "Loaded %zu habit completions for task <%s>", index, task.name);
+    // LOGI(TAG, "Loaded %zu habit completions for task <%s>", index, task.name);
 }

@@ -57,7 +57,7 @@ void CalendarRepository::loadAll()
 void CalendarRepository::habitCompletionPreview(Task &task)
 {
     const char *TAG = "CalendarRepository::habitCompletionPreview";
-    LOGI(TAG, "Loading habit completion preview for task <%s>", task.name);
+    // LOGI(TAG, "Loading habit completion preview for task <%s>", task.name);
 
     if (task.status != TaskStatus::HABIT)
     {
@@ -133,6 +133,40 @@ void CalendarRepository::sortTasks()
         std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
                   { return a.get_urgency() > b.get_urgency(); });
     }
+}
+
+Task *CalendarRepository::findTaskByUuid(const char *uuid)
+{
+    for (auto &tb : m_timeblocks)
+    {
+        for (auto &task : tb.tasks)
+        {
+            if (std::strncmp(task.uuid, uuid, UUID_LEN) == 0)
+            {
+                return &task;
+            }
+        }
+        for (auto &task : tb.archived_tasks)
+        {
+            if (std::strncmp(task.uuid, uuid, UUID_LEN) == 0)
+            {
+                return &task;
+            }
+        }
+    }
+    return nullptr;
+}
+
+Timeblock *CalendarRepository::findTimeblockByUuid(const char *uuid)
+{
+    for (auto &tb : m_timeblocks)
+    {
+        if (std::strncmp(tb.uuid, uuid, UUID_LEN) == 0)
+        {
+            return &tb;
+        }
+    }
+    return nullptr;
 }
 
 /* -------------------------------------------------------------------------- */

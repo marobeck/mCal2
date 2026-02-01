@@ -122,6 +122,7 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
 
     // --- New entry handling ---
     connect(newEntryView, &NewEntryView::taskCreated, this, &MainWindow::onTaskCreated);
+    connect(newEntryView, &NewEntryView::taskEdited, this, &MainWindow::onTaskEdited);
     connect(newTimeblockView, &NewTimeblockView::timeblockCreated, this, &MainWindow::onTimeblockCreated);
 
     connect(repo, &CalendarRepository::modelChanged, this, &MainWindow::modelChanged);
@@ -200,32 +201,14 @@ void MainWindow::onEditTaskRequested(const QString &taskUuid)
     const char *TAG = "MainWindow::onEditTaskRequested";
     LOGI(TAG, "Edit requested for task %s", taskUuid.toUtf8().constData());
 
-    // Find the Task in memory and pass a heap copy to NewEntryView via switchLeftPanel.
-    const Task *found = nullptr;
-    for (const auto &tb : repo->timeblocks())
-    {
-        for (const auto &t : tb.tasks)
-        {
-            if (std::strncmp(t.uuid, taskUuid.toUtf8().constData(), UUID_LEN) == 0)
-            {
-                found = &t;
-                break;
-            }
-        }
-        if (found)
-            break;
-    }
+    /** How to edit a task:
+     * Pass the task UUID to NewEntryView by value, note that the UUID will be the same.
+     * NewEntryView will populate its fields with the task data, and will be in edit mode.
+     * When NewEntryView saves the task call repo->updateTask() to overwrite the existing task.
+     */
 
-    if (!found)
-    {
-        LOGE(TAG, "Task to edit not found: %s", taskUuid.toUtf8().constData());
-        return;
-    }
-
-    // Make a heap copy and switch to NewEntryView with the pointer attached in QVariant
-    Task *copy = new Task(*found);
-    QVariant v = QVariant::fromValue(static_cast<const Task *>(copy));
-    // TODO: Implement an edit entry view that differs from new entry view
+    // Pass UUID to new entry view
+    QVariant v = QVariant::fromValue(taskUuid);
     switchLeftPanel(Scene::NewEntry, v);
 }
 
@@ -282,12 +265,22 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         break;
 
     case Scene::NewEntry:
-        // If a Task pointer was supplied, load it into the details view
-        if (data.canConvert<void *>())
+        // If a Task UUID was supplied, load it into the details view
+        if (data.canConvert<QString>())
         {
-            Task *t = static_cast<Task *>(data.value<void *>());
-            newEntryView->populateTimeblocks(repo->timeblocks());
+            QString uuid = data.toString();
+            newEntryView->loadTaskForEditing(repo->findTaskByUuid(uuid.toUtf8().constData()));
         }
+        else
+        {
+            if (data.isValid())
+            {
+                LOGW(TAG, "Invalid data provided to NewEntry scene; expected Task* or null.");
+            }
+            newEntryView->clearFields();
+        }
+        newEntryView->populateTimeblocks(repo->timeblocks());
+
         // Show the details/edit view on the left (use EntryDetailsView to
         // display task fields when switching from the todo list).
         leftStack->setCurrentWidget(newEntryView);
@@ -330,6 +323,21 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
     LOGI(TAG, "Task <%s> created for timeblock index %d", task->name, timeblockIndex);
 
     repo->addTask(*task, timeblockIndex);
+
+    // We copied the Task into the Timeblock, so free the heap allocation
+    delete task;
+}
+
+void MainWindow::onTaskEdited(Task *task)
+{
+    const char *TAG = "MainWindow::onTaskEdited";
+
+    LOGI(TAG, "Task <%s> edited", task->name);
+
+    if (!repo->updateTask(*task))
+    {
+        LOGE(TAG, "Failed to update task <%s>", task->name);
+    }
 
     // We copied the Task into the Timeblock, so free the heap allocation
     delete task;

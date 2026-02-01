@@ -23,6 +23,8 @@ public:
     void sortTimeblocks(); // sorts timeblocks in memory
     void sortTasks();      // sorts tasks within each timeblock in memory (not timeblocks)
     const std::vector<Timeblock> &timeblocks() const;
+    Task *findTaskByUuid(const char *uuid); // Recovers pointer to repository task by UUID
+    Timeblock *findTimeblockByUuid(const char *uuid); // Recovers pointer to repository timeblock by UUID
 
     /* ------------------------------ Load from DB ------------------------------ */
     // Load everything from DB into memory
