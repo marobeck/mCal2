@@ -37,6 +37,13 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     // Force everything to the top
     layout->addStretch();
 
+    m_addHabitEntryBtn = new QPushButton("Add Habit Entry", this);
+    layout->addWidget(m_addHabitEntryBtn);
+
+    connect(m_addHabitEntryBtn, &QPushButton::clicked, this, [this]()
+            { if (!m_currentTaskUuid.isEmpty())
+                emit addHabitEntryRequested(m_currentTaskUuid); });
+
     // --- Action buttons at bottom ---
     QHBoxLayout *btnRow = new QHBoxLayout;
     m_deleteBtn = new QPushButton("Delete", this);
@@ -139,6 +146,18 @@ void EntryDetailsView::loadTask(const Task *task)
         m_prereqLabel->setText(QString::fromUtf8(task->prereq->name));
     else
         m_prereqLabel->setText("");
+
+    // Habit data
+    if (task->status == TaskStatus::HABIT)
+    {
+        m_addHabitEntryBtn->setEnabled(true);
+        m_addHabitEntryBtn->setVisible(true);
+    }
+    else
+    {
+        m_addHabitEntryBtn->setVisible(false);
+        m_addHabitEntryBtn->setEnabled(false);
+    }
 
     // Track the currently-loaded task and enable actions
     m_currentTaskUuid = task->uuid;

@@ -59,6 +59,7 @@ public slots:
     void onTimeblockCreated(Timeblock *timeblock);
     void modelChanged();
     // Entry details actions
+    void onHabitEntryRequested(const QString &taskUuid);
     void onDeleteTaskRequested(const QString &taskUuid);
     void onMoveTaskRequested(const QString &taskUuid);
     void onEditTaskRequested(const QString &taskUuid);

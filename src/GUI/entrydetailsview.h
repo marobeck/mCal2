@@ -15,6 +15,7 @@ public:
     void loadTask(const Task *task);
 
 signals:
+    void addHabitEntryRequested(const QString &taskUuid);
     void deleteTaskRequested(const QString &taskUuid);
     void moveTaskRequested(const QString &taskUuid);
     void editTaskRequested(const QString &taskUuid);
@@ -27,6 +28,8 @@ private:
     QLabel *m_priorityLabel = nullptr;
     QLabel *m_urgencyLabel = nullptr;
     QLabel *m_prereqLabel = nullptr;
+    // Habit functions
+    QPushButton *m_addHabitEntryBtn = nullptr;
     // Action buttons
     QPushButton *m_deleteBtn = nullptr;
     QPushButton *m_moveBtn = nullptr;

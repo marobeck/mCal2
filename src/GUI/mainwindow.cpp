@@ -6,6 +6,7 @@
 
 #include "mainwindow.h"
 
+#include "guihelper.h"
 #include "log.h"
 
 // Qt functions
@@ -128,9 +129,33 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     connect(repo, &CalendarRepository::modelChanged, this, &MainWindow::modelChanged);
 
     // EntryDetailsView actions
+    connect(entryDetailsView, &EntryDetailsView::addHabitEntryRequested, this, &MainWindow::onHabitEntryRequested);
     connect(entryDetailsView, &EntryDetailsView::deleteTaskRequested, this, &MainWindow::onDeleteTaskRequested);
     connect(entryDetailsView, &EntryDetailsView::moveTaskRequested, this, &MainWindow::onMoveTaskRequested);
     connect(entryDetailsView, &EntryDetailsView::editTaskRequested, this, &MainWindow::onEditTaskRequested);
+}
+
+void MainWindow::onHabitEntryRequested(const QString &taskUuid)
+{
+    const char *TAG = "MainWindow::onHabitEntryRequested";
+    LOGI(TAG, "Add habit entry requested for task %s", taskUuid.toUtf8().constData());
+
+    // Get date from user
+    QDate date = getDateFromUser(this, "Add Habit Entry", "Select date for habit entry:");
+    if (!date.isValid())
+    {
+        LOGI(TAG, "User cancelled date selection.");
+        return;
+    }
+    const char *isoDate = date.toString("yyyy-MM-dd").toUtf8().constData();
+
+    LOGI(TAG, "Adding habit entry for date %s", isoDate);
+    // Call repository to add habit entry
+    if (!repo->addHabitEntry(taskUuid.toUtf8().constData(), isoDate))
+    {
+        LOGE(TAG, "Failed to add habit entry for task %s on date %s",
+             taskUuid.toUtf8().constData(), isoDate);
+    }
 }
 
 void MainWindow::onDeleteTaskRequested(const QString &taskUuid)

@@ -503,7 +503,16 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
             // Make a copy, refresh preview for the specific date, and compute new urgency
             Task updated = *foundTask;
             updated.update_due_date();
-            m_db.load_habit_completion_preview(updated, dateIso8601);
+            const char *today = nullptr;
+            {
+                // Get current date in ISO 8601 format
+                char now_str[11]; // "YYYY-MM-DD" + null terminator
+                time_t now = time(nullptr);
+                struct tm local_tm = *localtime(&now);
+                strftime(now_str, sizeof(now_str), "%Y-%m-%d", &local_tm);
+                today = now_str;
+            }
+            m_db.load_habit_completion_preview(updated, today); // Load updated preview including new entry relative to today
 
             float newUrgency = updated.get_urgency();
 
