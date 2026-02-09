@@ -2,6 +2,7 @@
 
 #include "habitbarwidget.h"
 #include <QPainter>
+#include <QDate>
 
 HabitBarWidget::HabitBarWidget(QWidget *parent)
     : QWidget(parent)
@@ -41,14 +42,26 @@ void HabitBarWidget::paintEvent(QPaintEvent *)
         if (m_values[i] == TaskStatus::COMPLETE)
         {
             painter.fillRect(rect, Qt::green);
+            painter.setPen(Qt::darkBlue);
         }
         else if (m_values[i] == TaskStatus::IN_PROGRESS)
         {
             painter.fillRect(rect, Qt::blue);
+            painter.setPen(Qt::white);
         }
         else // INCOMPLETE
         {
             painter.fillRect(rect, Qt::lightGray);
+            painter.setPen(Qt::black);
         }
+
+        // --- Draw days of week labels ---
+
+        // Assume m_values[0] is today, m_values[1] is yesterday, etc. so label from right to left
+        int dayOfWeek = QDate::currentDate().dayOfWeek();
+
+        painter.setFont(QFont("Arial", 8));
+        QString dayLabel = QDate::shortDayName((dayOfWeek + 6 - i) % 7 + 1); // 1=Mon, 7=Sun
+        painter.drawText(rect, Qt::AlignCenter, dayLabel);
     }
 }
