@@ -25,6 +25,13 @@
 #include <cstring>
 #include <string>
 
+// Asset folder for icons (used in official builds)
+#if 1
+const QString ASSET_FOLDER = "assets/";
+#else
+const QString ASSET_FOLDER = "../icons/";
+#endif
+
 /* -------------------------------------------------------------------------- */
 /*                                     GUI                                    */
 /* -------------------------------------------------------------------------- */
@@ -92,12 +99,11 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     central->setLayout(root);
 
     // --- Edge icons ---
-    addLeftEdgeButton(QIcon("../icons/schedule.png"), Scene::DaySchedule);
-    addLeftEdgeButton(QIcon("../icons/new_timeblock.png"), Scene::NewTimeblock);
-    addLeftEdgeButton(QIcon("../icons/new_entry.png"), Scene::NewEntry);
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "schedule.png"), Scene::DaySchedule);
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_timeblock.png"), Scene::NewTimeblock);
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_entry.png"), Scene::NewEntry);
 
-    addRightEdgeButton(QIcon("../icons/todo_list.png"), Scene::TodoList);
-
+    addRightEdgeButton(QIcon(ASSET_FOLDER + "todo_list.png"), Scene::TodoList);
     // Force everything to the top
     leftEdgeLayout->addStretch();
     rightEdgeLayout->addStretch();
