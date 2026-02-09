@@ -97,6 +97,20 @@ void CalendarRepository::habitCompletionPreview(Task &task)
     m_db.load_habit_completion_preview(task, now_str);
 }
 
+void CalendarRepository::habitCompletionStats(const char *taskUuid, std::vector<time_t> &completionDates)
+{
+    const char *TAG = "CalendarRepository::habitCompletionStats";
+    completionDates.clear();
+    try
+    {
+        m_db.get_habit_entries(taskUuid, completionDates);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to load habit entries for task %s: %d", taskUuid, err);
+    }
+}
+
 /* -------------------------------------------------------------------------- */
 /*                              In-memory access                              */
 /* -------------------------------------------------------------------------- */

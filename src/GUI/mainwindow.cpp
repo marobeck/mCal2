@@ -323,6 +323,19 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
             const Task *t = data.value<const Task *>();
             Q_ASSERT(t);
             entryDetailsView->loadTask(t);
+            // If this is a habit, fetch completion dates and populate the progress widget
+            if (t->status == TaskStatus::HABIT)
+            {
+                std::vector<time_t> dates;
+                repo->habitCompletionStats(t->uuid, dates);
+                QVector<QDate> qdates;
+                for (time_t tt : dates)
+                {
+                    QDate d = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(tt)).date();
+                    qdates.append(d);
+                }
+                entryDetailsView->setHabitCompletionDates(qdates);
+            }
         }
         leftStack->setCurrentWidget(entryDetailsView);
         currentLeftScene = Scene::EntryDetails;

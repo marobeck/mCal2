@@ -6,6 +6,7 @@
 
 #include <QPushButton>
 #include <QString>
+#include "widgets/habitprogresswidget.h"
 
 class EntryDetailsView : public QWidget
 {
@@ -13,6 +14,8 @@ class EntryDetailsView : public QWidget
 public:
     explicit EntryDetailsView(QWidget *parent = nullptr);
     void loadTask(const Task *task);
+    // Populate habit completion dates (QDate) for the habit progress widget
+    void setHabitCompletionDates(const QVector<QDate> &dates);
 
 signals:
     void addHabitEntryRequested(const QString &taskUuid);
@@ -30,6 +33,7 @@ private:
     QLabel *m_prereqLabel = nullptr;
     // Habit functions
     QPushButton *m_addHabitEntryBtn = nullptr;
+    HabitProgressWidget *m_habitProgress = nullptr;
     // Action buttons
     QPushButton *m_deleteBtn = nullptr;
     QPushButton *m_moveBtn = nullptr;

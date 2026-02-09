@@ -556,3 +556,39 @@ void Database::load_habit_completion_preview(Task &task, const char *current_dat
 
     // LOGI(TAG, "Loaded %zu habit completions for task <%s>", index, task.name);
 }
+
+void Database::get_habit_entries(const char *task_uuid, std::vector<time_t> &outDates)
+{
+    const char *TAG = "DB::get_habit_entries";
+
+    const char *sql = "SELECT date FROM habit_entries WHERE task_uuid = ? ORDER BY date ASC;";
+    sqlite3_stmt *stmt = nullptr;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, task_uuid, -1, SQLITE_STATIC);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        const unsigned char *date_text = sqlite3_column_text(stmt, 0); // "YYYY-MM-DD"
+        if (!date_text)
+            continue;
+
+        struct tm tm = {};
+        if (strptime(reinterpret_cast<const char *>(date_text), "%Y-%m-%d", &tm))
+        {
+            time_t t = mktime(&tm);
+            outDates.push_back(t);
+        }
+        else
+        {
+            LOGW(TAG, "Failed to parse date string %s", date_text);
+        }
+    }
+
+    sqlite3_finalize(stmt);
+}

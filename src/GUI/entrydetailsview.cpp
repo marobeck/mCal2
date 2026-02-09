@@ -6,6 +6,7 @@
 #include <QString>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include "widgets/habitprogresswidget.h"
 
 EntryDetailsView::EntryDetailsView(QWidget *parent)
     : QWidget(parent)
@@ -33,6 +34,11 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     m_descLabel = new QLabel("", this);
     m_descLabel->setWordWrap(true);
     layout->addWidget(m_descLabel);
+
+    // Habit progress widget (created but hidden until a habit is loaded)
+    m_habitProgress = new HabitProgressWidget(this);
+    m_habitProgress->setVisible(false);
+    layout->addWidget(m_habitProgress);
 
     // Force everything to the top
     layout->addStretch();
@@ -152,11 +158,14 @@ void EntryDetailsView::loadTask(const Task *task)
     {
         m_addHabitEntryBtn->setEnabled(true);
         m_addHabitEntryBtn->setVisible(true);
+        // Show habit progress area; actual dates will be populated by MainWindow
+        m_habitProgress->setVisible(true);
     }
     else
     {
         m_addHabitEntryBtn->setVisible(false);
         m_addHabitEntryBtn->setEnabled(false);
+        m_habitProgress->setVisible(false);
     }
 
     // Track the currently-loaded task and enable actions
@@ -164,4 +173,13 @@ void EntryDetailsView::loadTask(const Task *task)
     m_deleteBtn->setEnabled(true);
     m_moveBtn->setEnabled(true);
     m_editBtn->setEnabled(true);
+}
+
+void EntryDetailsView::setHabitCompletionDates(const QVector<QDate> &dates)
+{
+    if (m_habitProgress)
+    {
+        m_habitProgress->setCompletions(dates);
+        m_habitProgress->setVisible(!dates.isEmpty());
+    }
 }
