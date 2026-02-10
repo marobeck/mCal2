@@ -173,7 +173,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         for (auto &task : tb.tasks)
         {
             QListWidgetItem *item = new QListWidgetItem(list);
-            TaskItemWidget *widget = new TaskItemWidget(task);
+            TaskItemWidget *widget = new TaskItemWidget(task, repo);
 
             item->setSizeHint(widget->sizeHint());
             list->addItem(item);
@@ -182,9 +182,6 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             {
                 repo->habitCompletionPreview(const_cast<Task &>(task));
             }
-
-            // --- Todo list widget handling ---
-            connect(widget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
         }
 
         colLayout->addWidget(list);
@@ -214,11 +211,10 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         for (auto &at : tb.archived_tasks)
         {
             QListWidgetItem *aitem = new QListWidgetItem(archivedList);
-            TaskItemWidget *awidget = new TaskItemWidget(at);
+            TaskItemWidget *awidget = new TaskItemWidget(at, repo);
             aitem->setSizeHint(awidget->sizeHint());
             archivedList->addItem(aitem);
             archivedList->setItemWidget(aitem, awidget);
-            connect(awidget, &TaskItemWidget::completionToggled, this, &TodoListView::onTaskCompleted);
         }
 
         // Button shown when archived is collapsed; placed at bottom via stretch
@@ -304,6 +300,7 @@ void TodoListView::onListCurrentItemChanged(QListWidgetItem *current, QListWidge
     return;
 }
 
+//! Depreciated: TaskItemWidget now persists directly to the repository; no need for TodoListView to also handle completionToggled to avoid duplicate persistence operations.
 void TodoListView::onTaskCompleted(const Task &task, int checkState)
 {
     const char *TAG = "MainWindow::onTaskCompleted";
