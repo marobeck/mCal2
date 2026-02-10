@@ -20,6 +20,7 @@
 #include "newtimeblockview.h"
 #include "entrydetailsview.h"
 #include "dayscheduleview.h"
+#include "overviewview.h"
 
 Q_DECLARE_METATYPE(const Task *)
 
@@ -29,6 +30,7 @@ Q_DECLARE_METATYPE(const Task *)
 enum class Scene
 {
     TodoList,
+    Overview,
     DaySchedule,
     NewEntry,
     NewTimeblock,
@@ -69,14 +71,16 @@ public:
     CalendarRepository *repo = nullptr;
 
     // --- Scenes ---
-    DayScheduleView *scheduleView;
 
     /** Left panel scenes
+     * - Overview
      * - Schedule view
      * - New entry view
      * - Entry details view
      */
+    OverviewView *overviewView;
     QStackedWidget *leftStack;
+    DayScheduleView *scheduleView;
     NewEntryView *newEntryView;
     NewTimeblockView *newTimeblockView;
     EntryDetailsView *entryDetailsView;

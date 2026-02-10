@@ -26,7 +26,7 @@
 #include <string>
 
 // Asset folder for icons (used in official builds)
-#if 1
+#if 0
 const QString ASSET_FOLDER = "assets/";
 #else
 const QString ASSET_FOLDER = "../icons/";
@@ -65,18 +65,20 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
 
     // --- Left side scene manager ---
     leftStack = new QStackedWidget(this);
-    scheduleView = new DayScheduleView(this);
-    newEntryView = new NewEntryView(this);
-    newTimeblockView = new NewTimeblockView(this);
-    entryDetailsView = new EntryDetailsView(this);
+    overviewView = new OverviewView(leftStack, repo);
+    scheduleView = new DayScheduleView(leftStack);
+    newEntryView = new NewEntryView(leftStack);
+    newTimeblockView = new NewTimeblockView(leftStack);
+    entryDetailsView = new EntryDetailsView(leftStack);
 
     // Add schedule + detail/edit views to left stack
-    leftStack->addWidget(scheduleView);     // index 0
-    leftStack->addWidget(entryDetailsView); // index 1
-    leftStack->addWidget(newEntryView);     // index 2
-    leftStack->addWidget(newTimeblockView); // index 3
+    leftStack->addWidget(overviewView);     // index 0
+    leftStack->addWidget(scheduleView);     // index 1
+    leftStack->addWidget(entryDetailsView); // index 2
+    leftStack->addWidget(newEntryView);     // index 3
+    leftStack->addWidget(newTimeblockView); // index 4
 
-    leftStack->setCurrentWidget(scheduleView);
+    leftStack->setCurrentWidget(overviewView);
 
     // --- Right side scene manager ---
     rightStack = new QStackedWidget(this);
@@ -99,6 +101,7 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     central->setLayout(root);
 
     // --- Edge icons ---
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "overview.png"), Scene::Overview);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "schedule.png"), Scene::DaySchedule);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_timeblock.png"), Scene::NewTimeblock);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_entry.png"), Scene::NewEntry);
@@ -290,6 +293,12 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
 
     switch (scene)
     {
+    case Scene::Overview:
+        leftStack->setCurrentWidget(overviewView);
+        overviewView->updateOverview(repo->timeblocks()); // Refresh overview data
+        currentLeftScene = Scene::Overview;
+        break;
+
     case Scene::DaySchedule:
         leftStack->setCurrentWidget(scheduleView);
         currentLeftScene = Scene::DaySchedule;
