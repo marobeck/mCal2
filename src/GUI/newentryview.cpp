@@ -51,6 +51,9 @@ NewEntryView::NewEntryView(QWidget *parent)
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NewEntryView::onTypeChanged);
     form->addRow("Type:", m_typeCombo);
 
+    // --- Urgency and importance dropdowns ---
+    QHBoxLayout *urgRow = new QHBoxLayout;
+
     // Priority dropdown
     m_priorityCombo = new QComboBox(this);
     m_priorityCombo->addItem("Very Low", static_cast<int>(Priority::VERY_LOW));
@@ -59,7 +62,27 @@ NewEntryView::NewEntryView(QWidget *parent)
     m_priorityCombo->addItem("High", static_cast<int>(Priority::HIGH));
     m_priorityCombo->addItem("Very High", static_cast<int>(Priority::VERY_HIGH));
     m_priorityCombo->setCurrentIndex(2); // Default to Medium
-    form->addRow("Priority:", m_priorityCombo);
+    // Label
+    QLabel *priorityLabel = new QLabel("Priority:");
+    priorityLabel->setToolTip("Estimate of how important this task is (Very Low = not important at all, Very High = extremely important)");
+    urgRow->addWidget(priorityLabel, 0);
+    urgRow->addWidget(m_priorityCombo, 1);
+
+    // Scope dropdown
+    m_scopeCombo = new QComboBox(this);
+    m_scopeCombo->addItem("XS", static_cast<int>(Scope::XS));
+    m_scopeCombo->addItem("S", static_cast<int>(Scope::S));
+    m_scopeCombo->addItem("M", static_cast<int>(Scope::M));
+    m_scopeCombo->addItem("L", static_cast<int>(Scope::L));
+    m_scopeCombo->addItem("XL", static_cast<int>(Scope::XL));
+    m_scopeCombo->setCurrentIndex(2); // Default to M
+    // Label
+    QLabel *scopeLabel = new QLabel("Scope:");
+    scopeLabel->setToolTip("Estimate of how much effort/time would be required to get this task done (XS = very little effort, XL = a lot of effort)");
+    urgRow->addWidget(scopeLabel, 0);
+    urgRow->addWidget(m_scopeCombo, 1);
+
+    form->addRow(urgRow);
 
     // Completion parameters group - contains due date (for Task), frequency, or weekday controls
     QGroupBox *completionBox = new QGroupBox("Completion Parameters", this);
@@ -192,6 +215,28 @@ void NewEntryView::loadTaskForEditing(Task *task)
     }
     m_priorityCombo->setCurrentIndex(priorityIndex);
 
+    // Scope
+    int scopeIndex = 2; // Default to M
+    switch (task->scope)
+    {
+    case Scope::XS:
+        scopeIndex = 0;
+        break;
+    case Scope::S:
+        scopeIndex = 1;
+        break;
+    case Scope::M:
+        scopeIndex = 2;
+        break;
+    case Scope::L:
+        scopeIndex = 3;
+        break;
+    case Scope::XL:
+        scopeIndex = 4;
+        break;
+    }
+    m_scopeCombo->setCurrentIndex(scopeIndex);
+
     // Type and related fields
     if (task->status == TaskStatus::HABIT)
     {
@@ -288,6 +333,10 @@ void NewEntryView::onCreateClicked()
     // Set priority
     int rawPriority = m_priorityCombo->currentData().toInt();
     t->priority = static_cast<Priority>(rawPriority);
+
+    // Set scope
+    int rawScope = m_scopeCombo->currentData().toInt();
+    t->scope = static_cast<Scope>(rawScope);
 
     // Set due date or goal spec based on type
     int typeIndex = m_typeCombo->currentIndex();

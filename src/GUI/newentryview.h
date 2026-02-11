@@ -54,6 +54,7 @@ private:
     QTextEdit *m_descEdit = nullptr;
     QComboBox *m_timeblockCombo = nullptr;
     QComboBox *m_priorityCombo = nullptr;
+    QComboBox *m_scopeCombo = nullptr;
     QComboBox *m_typeCombo = nullptr; // Task or Habit
     QDateTimeEdit *m_dueEdit = nullptr;
     QCheckBox *m_undatedCheck = nullptr;
