@@ -215,6 +215,44 @@ std::string Task::due_date_string() const
     }
 }
 
+std::string Task::scope_string() const
+{
+    switch (scope)
+    {
+    case Scope::XS:
+        return "XS";
+    case Scope::S:
+        return "S";
+    case Scope::M:
+        return "M";
+    case Scope::L:
+        return "L";
+    case Scope::XL:
+        return "XL";
+    default:
+        return "Unknown";
+    }
+}
+
+char Task::scope_char() const
+{
+    switch (scope)
+    {
+    case Scope::XS:
+        return 's';
+    case Scope::S:
+        return 'S';
+    case Scope::M:
+        return 'M';
+    case Scope::L:
+        return 'L';
+    case Scope::XL:
+        return 'X';
+    default:
+        return '?';
+    }
+}
+
 std::string Task::priority_string() const
 {
     switch (priority)
@@ -292,23 +330,32 @@ inline float status_weight(TaskStatus s)
  */
 inline float compute_deadline_pressure(time_t now, time_t due)
 {
-    const float K = 70.0f;
-    const float epsilon = 1.0f / 60.0f; // one minute
+    /**
+     * Pressure function: pressure = exp(-T, t)
+     * T = time until deadline in hours
+     * t = time constant (half life of pressure in hours)
+     */
+    const float t = 48.0f; // Half life of 48 hours; TODO: make this user-configurable
+    float T = difftime(due, now) / 3600.0f;
 
-    std::time_t seconds_left = difftime(due, now);
-    std::time_t hours_left = seconds_left / 3600.0;
+    // Linear scaling for overdue tasks to avoid very large pressures
+    if (T < 0)
+    {
+        return std::max(std::abs(T), 1.0f);
+    }
 
-    if (hours_left <= 0)
-        return 100.0f; // massively urgent if overdue
-
-    return K / std::max(static_cast<float>(hours_left), epsilon);
+    return std::exp(-T / t);
 }
 
 float Task::get_urgency() const
 {
     // Constants
-    const float C = 0.8f; // Undated pressure constant
+    const float C = 0.5f;   // Undated pressure constant
+    const float w_p = 0.4f; // Priority weight
+    const float w_u = 0.4f; // Urgency/deadline pressure weight
+    const float w_e = 0.2f; // Effort/scope weight
 
+    // Execptions
     if (priority == Priority::NONE)
     {
         return 0.0f;
@@ -318,12 +365,21 @@ float Task::get_urgency() const
         return 0.0f;
     }
 
-    float priority_value = static_cast<float>(priority); // Get enumerator value
+    // --- Calculate urgency ---
+    //! Should have multiple types of sorting factors, for now we do hardest first
 
-    if (!due_date)
-    {
-        return priority_value * C * status_weight(status);
-    }
+    /** Eat the frog
+      score_frog = w_u * U
+      + w_p * P_norm
+      + w_e * E_norm
+     */
 
-    return priority_value * compute_deadline_pressure(time(nullptr), due_date) * status_weight(status);
+    // Normalize priority and effort to [0, 1]
+    double P_norm = (static_cast<int>(priority) - static_cast<int>(Priority::VERY_LOW)) / static_cast<int>(Priority::VERY_HIGH);
+    double E_norm = (static_cast<int>(scope) - static_cast<int>(Scope::XS)) / static_cast<int>(Scope::XL);
+
+    // Compute deadline pressure, from [0, 1] or [1, inf) if overdue, or constant C if undated
+    double pressure = due_date ? compute_deadline_pressure(time(nullptr), due_date) : C;
+
+    return w_u * pressure + w_p * P_norm + w_e * E_norm;
 }

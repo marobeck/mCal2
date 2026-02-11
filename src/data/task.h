@@ -17,6 +17,15 @@ enum class Priority
     VERY_HIGH = 7
 };
 
+enum class Scope
+{
+    XS = 1,
+    S = 2,
+    M = 3,
+    L = 4,
+    XL = 5
+};
+
 enum class TaskStatus
 {
     INCOMPLETE = 0,
@@ -40,6 +49,7 @@ public:
 
     time_t due_date = 0;                        // Due date, 0 = undated
     Priority priority = Priority::NONE;         // Priority
+    Scope scope = Scope::XS;                    // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
     TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
 
     // --- Habit parameters ---
@@ -76,6 +86,12 @@ public:
      */
     std::string due_date_full_string() const;
     std::string due_date_string() const;
+
+    /**
+     * Get scope as string
+     */
+    std::string scope_string() const;
+    char scope_char() const;
 
     /**
      * Get priority as string

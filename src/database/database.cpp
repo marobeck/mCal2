@@ -14,6 +14,36 @@ void generate_uuid(char *uuid_buf)
     uuid_unparse_lower(binuuid, uuid_buf);
 }
 
+/** Database schema
+ * Tables:
+ * timeblocks:
+ *  uuid (PK)       - unique identifier for timeblock
+ *  status          - ONGOING, STOPPED, DONE, PINNED
+ *  name            - user-defined name for timeblock
+ *  description     - user-defined description for timeblock
+ *  day_frequency   - encoded GoalSpec for which days this timeblock occurs on (0 = single event)
+ *  duration        - length of timeblock in seconds
+ *! Review: We could simplify the timeblock schema by just having a single 'start' field that represents either the start
+ *!  time for single events or the epoch time of when a recurring event first started. The GoalSpec day_frequency can then
+ *!  be used to determine which days the event occurs on, and we can calculate the next occurrence based on the current time
+ *!  and the start time. This would eliminate the need for a separate 'day_start' field and reduce redundancy in the schema.
+ *  start           - for single events, time since epoch of when event starts
+ *  day_start       - For weekly events; Time since start of day (in seconds)
+ * tasks:
+ *  uuid (PK)           - unique identifier for task
+ *  timeblock_uuid (FK) - foreign key referencing parent timeblock
+ *  name                - user-defined name for task
+ *  description         - user-defined description for task
+ *  due_date            - for non-habits: time since epoch of when task is due.
+ *  status              - INCOMPLETE, IN_PROGRESS, HABIT, COMPLETE
+ *  priority            - NONE, LOW, MEDIUM, HIGH, VERY_HIGH
+ *!  scope               - User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
+ *  goal_spec           - encoded GoalSpec for habit tasks; 0 for non-habit tasks
+ * habit_entries:
+ *  task_uuid (PK, FK)  - foreign key referencing parent habit
+ *  date (PK)           - ISO 8601 date string (YYYY-MM-DD) representing a day the habit was completed
+ */
+
 Database::Database()
 {
     const char *TAG = "DB::init_db";
@@ -45,6 +75,7 @@ Database::Database()
             description TEXT, \
             due_date INTEGER, \
             priority INTEGER NOT NULL, \
+            scope INTEGER NOT NULL, \
             status INTEGER NOT NULL, \
             goal_spec INTEGER NOT NULL, \
             FOREIGN KEY(timeblock_uuid) REFERENCES timeblocks(uuid) ON DELETE CASCADE); \
@@ -249,10 +280,11 @@ void Database::insert_task(const Task &task)
      * description
      * due_date
      * priority
+     * scope
      * status
      * goal_spec
      */
-    const char *sql = "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+    const char *sql = "INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -267,8 +299,9 @@ void Database::insert_task(const Task &task)
     sqlite3_bind_text(stmt, 4, task.desc, -1, SQLITE_STATIC);
     sqlite3_bind_int64(stmt, 5, task.due_date);
     sqlite3_bind_int(stmt, 6, static_cast<int>(task.priority));
-    sqlite3_bind_int(stmt, 7, static_cast<int>(task.status));
-    sqlite3_bind_int(stmt, 8, task.goal_spec.to_sql());
+    sqlite3_bind_int(stmt, 7, static_cast<int>(task.scope));
+    sqlite3_bind_int(stmt, 8, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 9, task.goal_spec.to_sql());
 
     // Execute
     int rc = sqlite3_step(stmt);
@@ -313,8 +346,9 @@ void Database::load_tasks(Timeblock *timeblock)
         t.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
         t.due_date = sqlite3_column_int64(stmt, 4);
         t.priority = static_cast<Priority>(sqlite3_column_int(stmt, 5));
-        t.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 6));
-        t.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 7));
+        t.scope = static_cast<Scope>(sqlite3_column_int(stmt, 6));
+        t.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 7));
+        t.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 8));
 
         // Sort between archive and active tasks
         if (t.status == TaskStatus::COMPLETE)
@@ -348,7 +382,7 @@ void Database::update_task(const Task &task)
      * status
      * goal_spec
      */
-    const char *sql = "UPDATE tasks SET name = ?, description = ?, due_date = ?, priority = ?, status = ?, goal_spec = ? WHERE uuid = ?;";
+    const char *sql = "UPDATE tasks SET timeblock_uuid = ?, name = ?, description = ?, due_date = ?, priority = ?, scope = ?, status = ?, goal_spec = ? WHERE uuid = ?;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -357,13 +391,15 @@ void Database::update_task(const Task &task)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_text(stmt, 1, task.name, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, task.desc, -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 3, task.due_date);
-    sqlite3_bind_int(stmt, 4, static_cast<int>(task.priority));
-    sqlite3_bind_int(stmt, 5, static_cast<int>(task.status));
-    sqlite3_bind_int(stmt, 6, task.goal_spec.to_sql());
-    sqlite3_bind_text(stmt, 7, task.uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, task.timeblock_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, task.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 4, task.due_date);
+    sqlite3_bind_int(stmt, 5, static_cast<int>(task.priority));
+    sqlite3_bind_int(stmt, 6, static_cast<int>(task.scope));
+    sqlite3_bind_int(stmt, 7, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 8, task.goal_spec.to_sql());
+    sqlite3_bind_text(stmt, 9, task.uuid, -1, SQLITE_STATIC);
 
     // Execute
     int rc = sqlite3_step(stmt);
