@@ -318,6 +318,7 @@ void NewEntryView::onCreateClicked()
     if (m_editMode)
     {
         memcpy(t->uuid, m_editingTask->uuid, UUID_LEN);
+        memcpy(t->timeblock_uuid, m_editingTask->timeblock_uuid, UUID_LEN);
     }
 
     // Set name and description

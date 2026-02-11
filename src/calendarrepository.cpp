@@ -440,14 +440,14 @@ bool CalendarRepository::moveTask(const char *taskUuid, const char *timeblockUui
     // Update task's timeblock_uuid
     strncpy(movingTask.timeblock_uuid, timeblockUuid, UUID_LEN);
 
-    // Update in database
+    // Move in database
     try
     {
         m_db.update_task(movingTask);
     }
     catch (int err)
     {
-        LOGE(TAG, "Failed to update task in database: %d", err);
+        LOGE(TAG, "Failed to update task's timeblock in database: %d", err);
         return false;
     }
 
