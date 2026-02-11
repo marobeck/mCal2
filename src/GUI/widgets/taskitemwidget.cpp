@@ -109,8 +109,8 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
         layout->addWidget(due);
     }
 
-    // --- Priority ---
-    QLabel *urgency = new QLabel("Priority: " + QString::fromStdString(t.priority_string()), this);
+    // --- Priority + Scope ---
+    QLabel *urgency = new QLabel("Priority: " + QString::fromStdString(t.priority_string()) + ", Scope: " + QString::fromStdString(t.scope_string()), this);
     layout->addWidget(urgency);
 }
 
