@@ -19,6 +19,7 @@ enum class Priority
 
 enum class Scope
 {
+    NONE = -1,
     XS = 1,
     S = 2,
     M = 3,
@@ -49,7 +50,7 @@ public:
 
     time_t due_date = 0;                        // Due date, 0 = undated
     Priority priority = Priority::NONE;         // Priority
-    Scope scope = Scope::XS;                    // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
+    Scope scope = Scope::NONE;                  // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
     TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
 
     // --- Habit parameters ---
