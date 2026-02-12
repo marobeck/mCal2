@@ -354,6 +354,15 @@ bool CalendarRepository::updateTask(const Task &task)
         // Place task into correct position based on urgency
         // Adjust location in timeblock based on urgency
         float taskUrgency = task.get_urgency();
+        if (parentTimeblock->tasks.empty())
+        {
+            parentTimeblock->tasks.push_back(task);
+            LOGI(TAG, "Moved task <%s> to active tasks in timeblock <%s> at position 0 (only task)", task.name, parentTimeblock->name);
+            // Remove from archived tasks
+            parentTimeblock->archived_tasks.erase(parentTimeblock->archived_tasks.begin() + taskIdx);
+            emit modelChanged();
+            return true;
+        }
         for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
         {
             float u = parentTimeblock->tasks[i].get_urgency();
@@ -367,13 +376,8 @@ bool CalendarRepository::updateTask(const Task &task)
         }
 
         // Remove from archived tasks
-        auto &archived = parentTimeblock->archived_tasks;
-        auto it = std::find_if(archived.begin(), archived.end(), [&task](const Task &t)
-                               { return std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0; });
-        if (it != archived.end())
-        {
-            archived.erase(it);
-        }
+        parentTimeblock->archived_tasks.erase(parentTimeblock->archived_tasks.begin() + taskIdx);
+
         LOGI(TAG, "Restored task <%s> to active tasks in timeblock <%s>", task.name, parentTimeblock->name);
         emit modelChanged();
         return true;
