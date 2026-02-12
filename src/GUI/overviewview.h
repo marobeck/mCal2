@@ -26,4 +26,5 @@ private:
     CalendarRepository *repo = nullptr;
 
     QListWidget *m_urgentTasksList = nullptr;
+    QListWidget *m_completedTasksList = nullptr;
 };

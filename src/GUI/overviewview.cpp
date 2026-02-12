@@ -30,6 +30,14 @@ OverviewView::OverviewView(QWidget *parent, CalendarRepository *dataRepo)
     m_urgentTasksList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     // m_urgentTasksList->setMaximumWidth(400); // Limit width
     layout->addWidget(m_urgentTasksList);
+
+    // --- Ledger of tasks completed today ---
+
+    m_completedTasksList = new QListWidget(this);
+    m_completedTasksList->setStyleSheet("QListWidget { background: darkGrey; border: none; }");
+    m_completedTasksList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    layout->addWidget(m_completedTasksList);
+
     updateOverview(repo->timeblocks());
 }
 
@@ -68,5 +76,53 @@ void OverviewView::updateOverview(const std::vector<Timeblock> &timeblocks)
         item->setSizeHint(widget->sizeHint());
         m_urgentTasksList->addItem(item);
         m_urgentTasksList->setItemWidget(item, widget);
+    }
+
+    // --- Update ledger of tasks completed today ---
+
+    std::vector<const Task *> completedToday;
+    time_t now = std::time(nullptr);
+    for (const auto &tb : timeblocks)
+    {
+        for (const auto &task : tb.archived_tasks)
+        {
+            // Check if task was completed today
+            if (task.completed_datetime != 0)
+            {
+                time_t startOfDay = now - (now % 86400); // Get start of current day
+                if (task.completed_datetime >= startOfDay)
+                {
+                    completedToday.push_back(&task);
+                }
+            }
+        }
+    }
+
+    if (completedToday.empty())
+    {
+        m_completedTasksList->clear();
+        QListWidgetItem *item = new QListWidgetItem("No tasks completed today.", m_completedTasksList);
+        item->setTextAlignment(Qt::AlignVCenter | Qt::AlignHCenter); // Center the text
+        item->setForeground(Qt::darkGray);                               // Set text color to dark red
+        item->setFont(QFont("Helvetica", 18, QFont::Bold)); // Set font to bold
+        item->setFlags(Qt::NoItemFlags);                             // Make item non-interactive
+        item->setSizeHint(QSize(m_completedTasksList->width(), 50)); // Set item height
+        m_completedTasksList->addItem(item);
+        return;
+    }
+
+    // Sort completed tasks by completion time (most recent first)
+    std::sort(completedToday.begin(), completedToday.end(), [](const Task *a, const Task *b)
+              { return a->completed_datetime > b->completed_datetime; });
+
+    // Update the completed tasks list widget
+    m_completedTasksList->clear();
+    for (const auto *task : completedToday)
+    {
+        QListWidgetItem *item = new QListWidgetItem(m_completedTasksList);
+        TaskItemWidget *widget = new TaskItemWidget(*task, repo, this, TaskItemWidget::Mode::COMPACT);
+        item->setSizeHint(widget->sizeHint());
+        m_completedTasksList->addItem(item);
+        m_completedTasksList->setItemWidget(item, widget);
     }
 }
