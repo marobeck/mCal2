@@ -126,7 +126,7 @@ void TaskItemWidget::onCompletionChanged(int checkState)
     f.setStrikeOut(checkState == Qt::Checked);
     m_nameLabel->setFont(f);
 
-    emit completionToggled(m_task, checkState);
+    emit completionToggled(m_task, checkState); //! Unused, since TaskItemWidget handles persistance directly
 
     // If we have a repository pointer, handle persistence directly from here
     if (m_repo)
@@ -138,10 +138,17 @@ void TaskItemWidget::onCompletionChanged(int checkState)
             if (checkState == Qt::Checked)
             {
                 Task tcopy = m_task;
+
+                // Note that the habit was completed today
+                tcopy.completed_datetime = now;
+
                 QTimer::singleShot(0, this, [this, tcopy, now]()
                                    {
                     if (m_repo)
-                        m_repo->addHabitEntry(tcopy.uuid, now); });
+                    {
+                        m_repo->addHabitEntry(tcopy.uuid, now);
+                        m_repo->updateTask(tcopy);
+                    } });
             }
             else if (checkState == Qt::Unchecked)
             {
@@ -161,7 +168,13 @@ void TaskItemWidget::onCompletionChanged(int checkState)
         else if (checkState == Qt::PartiallyChecked)
             new_task.status = TaskStatus::IN_PROGRESS;
         else if (checkState == Qt::Checked)
+        {
+            // Note that the entry has been completed today
+            time_t now = time(nullptr);
+            new_task.completed_datetime = now;
+
             new_task.status = TaskStatus::COMPLETE;
+        }
 
         QTimer::singleShot(0, this, [this, new_task]()
                            {

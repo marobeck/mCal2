@@ -148,7 +148,12 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
                     else if (idx == 1)
                         newTb.status = TimeblockStatus::STOPPED;
                     else if (idx == 2)
+                    {
                         newTb.status = TimeblockStatus::DONE;
+
+                        // Note completion time when marked done
+                        newTb.completed_datetime = time(nullptr);
+                    }
                     else if (idx == 3)
                         newTb.status = TimeblockStatus::PINNED;
 
@@ -227,7 +232,8 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         colLayout->addWidget(showArchivedBtn);
 
         // Handlers to toggle collapsed/expanded state
-        connect(showArchivedBtn, &QPushButton::clicked, this, [=]() {
+        connect(showArchivedBtn, &QPushButton::clicked, this, [=]()
+                {
             // Expand: hide the show button, reveal archivedWrapper and archivedList
             showArchivedBtn->setVisible(false);
             archivedWrapper->setVisible(true);
@@ -240,10 +246,10 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             {
                 colLayout->setStretch(listIndex, 1);
                 colLayout->setStretch(archIndex, 1);
-            }
-        });
+            } });
 
-        connect(collapseArchivedBtn, &QPushButton::clicked, this, [=]() {
+        connect(collapseArchivedBtn, &QPushButton::clicked, this, [=]()
+                {
             // Collapse: hide wrapper, show the show button at bottom
             archivedList->setVisible(false);
             collapseArchivedBtn->setVisible(false);
@@ -256,8 +262,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             {
                 colLayout->setStretch(listIndex, 1);
                 colLayout->setStretch(archIndex, 0);
-            }
-        });
+            } });
 
         // Track list for your backend
         todoLists.append(list);
