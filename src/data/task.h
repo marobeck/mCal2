@@ -52,6 +52,7 @@ public:
     Priority priority = Priority::NONE;         // Priority
     Scope scope = Scope::NONE;                  // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
     TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
+    time_t completed_datetime = 0;              // Time since epoch when task was completed; 0 if not completed
 
     // --- Habit parameters ---
 

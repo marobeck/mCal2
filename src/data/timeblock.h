@@ -48,6 +48,7 @@ public:
     std::vector<Task> archived_tasks; // Completed tasks moved here
 
     TimeblockStatus status = TimeblockStatus::ONGOING;
+    time_t completed_datetime = 0; // Time since epoch when timeblock was completed; 0 if not completed
 
     Timeblock() = default;
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);

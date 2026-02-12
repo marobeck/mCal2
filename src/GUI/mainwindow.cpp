@@ -419,4 +419,6 @@ void MainWindow::modelChanged()
     todoListView->updateTasklists(repo->timeblocks());
     // Also update NewEntryView's timeblock list
     newEntryView->populateTimeblocks(repo->timeblocks());
+    // Update overview data
+    overviewView->updateOverview(repo->timeblocks());
 }

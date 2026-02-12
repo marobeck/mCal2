@@ -21,6 +21,7 @@ Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_
     due_date = due_date_;
     priority = priority_;
     status = TaskStatus::INCOMPLETE;
+    completed_datetime = 0;
     goal_spec = GoalSpec::from_sql(frequency_);
     LOGI("Task::Constructor", "Created task <%s> with frequency %d", name, frequency_);
 }
