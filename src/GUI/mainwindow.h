@@ -29,12 +29,18 @@ Q_DECLARE_METATYPE(const Task *)
  */
 enum class Scene
 {
+    // --- Entry views ---
     TodoList,
     Overview,
     DaySchedule,
-    NewEntry,
-    NewTimeblock,
     EntryDetails,
+
+    // --- Entry management ---
+    NewEntry,
+    NewEntryLink, // Special state for new entry view, allowing for tasks to be selected in entry views
+    NewTimeblock,
+
+    // --- Settings ---
     Settings
 };
 
@@ -56,6 +62,7 @@ public slots:
     void switchLeftPanel(Scene scene, QVariant data = {});
 
     // Run updates
+    void onTaskSelected(const Task *task);
     void onTaskCreated(Task *task, int timeblockIndex);
     void onTaskEdited(Task *task);
     void onTimeblockCreated(Timeblock *timeblock);

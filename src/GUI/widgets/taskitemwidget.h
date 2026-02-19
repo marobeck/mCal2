@@ -28,6 +28,7 @@ public:
     {
         FULL = 0,
         COMPACT = 1,
+        PREVIEW = 2
     };
     Mode m_mode = Mode::FULL;
 

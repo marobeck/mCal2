@@ -127,6 +127,34 @@ NewEntryView::NewEntryView(QWidget *parent)
     }
     completionLayout->addWidget(m_weekdayWidget);
 
+    // --- Prerequisites box (only for tasks) ---
+    m_prereqBox = new QWidget(this);
+    QHBoxLayout *prereqLayout = new QHBoxLayout(m_prereqBox);
+    prereqLayout->setContentsMargins(0, 0, 0, 0);
+    QLabel *prereqLabel = new QLabel("Prerequisites:", m_prereqBox);
+    m_prereqPlusBtn = new QPushButton("+", m_prereqBox);
+    m_prereqOkBtn = new QPushButton("OK", m_prereqBox);
+    m_prereqCancelBtn = new QPushButton("Cancel", m_prereqBox);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_prereqPreviewArea = new QWidget(m_prereqBox);
+    QHBoxLayout *previewLayout = new QHBoxLayout(m_prereqPreviewArea);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    m_prereqPreviewArea->setVisible(false);
+
+    prereqLayout->addWidget(prereqLabel, 1);
+    prereqLayout->addWidget(m_prereqPreviewArea, 2);
+    prereqLayout->addWidget(m_prereqPlusBtn, 0);
+    prereqLayout->addWidget(m_prereqOkBtn, 0);
+    prereqLayout->addWidget(m_prereqCancelBtn, 0);
+
+    completionLayout->addWidget(m_prereqBox);
+
+    // Connect prerequisite buttons
+    connect(m_prereqPlusBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqPlusClicked);
+    connect(m_prereqOkBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqOkClicked);
+    connect(m_prereqCancelBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqCancelClicked);
+
     form->addRow(completionBox);
 
     layout->addLayout(form);
@@ -162,6 +190,84 @@ void NewEntryView::clearFields()
     m_dueEdit->setDateTime(QDateTime::currentDateTime());
     m_undatedCheck->setChecked(false);
     m_timeblockCombo->setEnabled(true);
+}
+
+void NewEntryView::onPrereqPlusClicked()
+{
+    // Enter link-selection mode: show OK/Cancel, hide plus, notify MainWindow
+    m_prereqPlusBtn->setVisible(false);
+    m_prereqOkBtn->setVisible(true);
+    m_prereqCancelBtn->setVisible(true);
+    m_prereqPreviewArea->setVisible(true);
+    m_linkModeActive = true;
+    m_prereqUuid.clear();
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    emit requestStartPrereqLink();
+}
+
+void NewEntryView::onPrereqOkClicked()
+{
+    // Confirm selection and leave link mode
+    m_prereqPlusBtn->setVisible(true);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_linkModeActive = false;
+    emit requestEndPrereqLink();
+}
+
+void NewEntryView::onPrereqCancelClicked()
+{
+    // Cancel selection and clear preview
+    m_prereqPlusBtn->setVisible(true);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_linkModeActive = false;
+    m_prereqUuid.clear();
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    m_prereqPreviewArea->setVisible(false);
+    emit requestEndPrereqLink();
+}
+
+void NewEntryView::previewPrerequisite(const Task *task)
+{
+    // If nullptr -> cancel
+    if (!task)
+    {
+        // act like cancel
+        onPrereqCancelClicked();
+        return;
+    }
+
+    // Show preview widget inside preview area
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    m_prereqPreviewWidget = new TaskItemWidget(*task, nullptr, m_prereqPreviewArea, TaskItemWidget::Mode::PREVIEW);
+    QHBoxLayout *layout = qobject_cast<QHBoxLayout *>(m_prereqPreviewArea->layout());
+    if (!layout)
+    {
+        layout = new QHBoxLayout(m_prereqPreviewArea);
+        layout->setContentsMargins(0, 0, 0, 0);
+    }
+    layout->addWidget(m_prereqPreviewWidget);
+    m_prereqPreviewArea->setVisible(true);
+    // Store uuid for later retrieval
+    m_prereqUuid = task->uuid;
+}
+
+std::string NewEntryView::takePrereqUuid()
+{
+    return m_prereqUuid;
 }
 
 void NewEntryView::loadTaskForEditing(Task *task)

@@ -26,7 +26,6 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     // --- Top row: completion checkbox + name ---
     QHBoxLayout *topRow = new QHBoxLayout;
 
-    // Check box
     m_doneCheck = new QCheckBox(this);
     bool completed = false;
     // If it's a task (not habit), set tristate based on status
@@ -70,7 +69,7 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     topRow->addWidget(m_doneCheck, 0, Qt::AlignVCenter);
     topRow->addWidget(m_nameLabel, 1);
 
-    if (mode == Mode::COMPACT)
+    if (mode == Mode::COMPACT || mode == Mode::PREVIEW)
     {
         // Display priority in a single character for compact mode
         char priorityChar = t.priority_char();
@@ -85,10 +84,15 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
             topRow->addWidget(m_priorityLabel, 0, Qt::AlignRight);
         }
     }
+    if (mode == Mode::PREVIEW || t.get_urgency() < 0)
+    {
+        // In preview mode, we want to disable interaction and just show a static snapshot of the task
+        m_doneCheck->setEnabled(false);
+    }
 
     layout->addLayout(topRow);
 
-    if (mode == Mode::COMPACT)
+    if (mode == Mode::COMPACT || mode == Mode::PREVIEW)
     {
         // Ignore rest of details in compact mode
         resizeEvent(nullptr); // Trigger initial eliding of name

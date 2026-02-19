@@ -7,6 +7,7 @@
 #include "task.h"
 #include "database.h"
 
+#include "taskitemwidget.h"
 #include <QLabel>
 #include <QWidget>
 #include <QLineEdit>
@@ -32,11 +33,19 @@ public:
     void loadTaskForEditing(Task *task);
     // Clear all input fields and reset to new entry mode
     void clearFields();
+    // When in NewEntryLink mode, preview a candidate prerequisite task (nullptr to cancel)
+    void previewPrerequisite(const Task *task);
+    // Return the selected prerequisite UUID (empty if none)
+    std::string takePrereqUuid();
 signals:
     // Emitted when the user creates a new task. Caller receives ownership of the Task*
     void taskCreated(Task *task, int timeblockIndex);
     // Emitted when the user edits an existing task. Caller receives ownership of the Task*
     void taskEdited(Task *task);
+    // Request that the main window enter link-selection mode for prerequisites
+    void requestStartPrereqLink();
+    // Request that the main window exit link-selection mode
+    void requestEndPrereqLink();
 
 private slots:
     void onTypeChanged(int index);
@@ -68,4 +77,17 @@ private:
     QCheckBox *m_weekdayChecks[7];
 
     QPushButton *m_createBtn = nullptr;
+
+    // Prerequisite UI
+    QWidget *m_prereqBox = nullptr;
+    QPushButton *m_prereqPlusBtn = nullptr;
+    QPushButton *m_prereqOkBtn = nullptr;
+    QPushButton *m_prereqCancelBtn = nullptr;
+    QWidget *m_prereqPreviewArea = nullptr;
+    TaskItemWidget *m_prereqPreviewWidget = nullptr;
+    std::string m_prereqUuid;
+    bool m_linkModeActive = false;
+    void onPrereqPlusClicked();
+    void onPrereqOkClicked();
+    void onPrereqCancelClicked();
 };
