@@ -3,9 +3,16 @@
 #include <ctime>
 #include <string>
 #include <sqlite3.h>
+#include <vector>
 
 #include "defs.h"
 #include "goalspec.h"
+
+enum class LinkType
+{
+    DEPENDENCY = 0,
+    HABIT_TRIGGER = 1
+};
 
 enum class Priority
 {
@@ -53,6 +60,9 @@ public:
     Scope scope = Scope::NONE;                  // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
     TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
     time_t completed_datetime = 0;              // Time since epoch when task was completed; 0 if not completed
+
+    // Prerequisite task(s) that must be completed before this one can be completed; empty if no prerequisite
+    std::vector<Task *> prerequisites;
 
     // --- Habit parameters ---
 

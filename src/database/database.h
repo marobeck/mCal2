@@ -42,4 +42,9 @@ public:
     void load_habit_completion_preview(Task &task, const char *current_date_iso8601);
     // Load all habit entry dates for a task (ISO date strings -> time_t)
     void get_habit_entries(const char *task_uuid, std::vector<time_t> &outDates);
+
+    // -------------------------------------- Entry Link Data ----------------------------------------
+    void add_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void remove_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids);
 };

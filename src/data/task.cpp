@@ -366,6 +366,15 @@ float Task::get_urgency() const
         return 0.0f;
     }
 
+    // Urgency is -1 if blocked by an incomplete prerequisite
+    for (const Task *prereq : prerequisites)
+    {
+        if (prereq->status != TaskStatus::COMPLETE)
+        {
+            return -1.0f;
+        }
+    }
+
     // --- Calculate urgency ---
     //! Should have multiple types of sorting factors, for now we do hardest first
 

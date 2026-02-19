@@ -38,6 +38,12 @@ void CalendarRepository::loadAll()
     {
         m_db.load_tasks(&tb);
 
+        // Load linked tasks for each task
+        for (auto &task : tb.tasks)
+        {
+            getLinkedEntries(&task);
+        }
+
         // Sort tasks within this timeblock by descending urgency (highest urgency first)
         std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
                   { return a.get_urgency() > b.get_urgency(); });
@@ -169,6 +175,26 @@ Task *CalendarRepository::findTaskByUuid(const char *uuid)
         }
     }
     return nullptr;
+}
+
+/**
+ * Finds tasks by list of UUIDs and fills outTasks with pointers to those tasks
+ * This is faster as it only iterates through the timeblocks and tasks once, rather than once per UUID
+ *! outTasks is cleared at the start of the function and will only contain tasks that were found
+ */
+void CalendarRepository::findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks)
+{
+    // TODO: Implement hash map for even faster lookup, current solution is O(n*m)
+
+    outTasks.clear();
+    for (const char *uuid : uuids)
+    {
+        Task *task = findTaskByUuid(uuid);
+        if (task)
+        {
+            outTasks.push_back(task);
+        }
+    }
 }
 
 Timeblock *CalendarRepository::findTimeblockByUuid(const char *uuid)
@@ -674,6 +700,103 @@ bool CalendarRepository::habitEntryExists(const char *taskUuid, time_t date)
     struct tm *tm_info = localtime(&date);
     strftime(dateIso8601, sizeof(dateIso8601), "%Y-%m-%d", tm_info);
     return habitEntryExists(taskUuid, dateIso8601);
+}
+
+/* ------------------------------- Entry links ------------------------------ */
+
+/**
+ * Add a link between two tasks and update the in-memory model.
+ */
+bool CalendarRepository::addEntryLink(Task *parentTask, Task *childTask, LinkType linkType)
+{
+    const char *TAG = "CalendarRepository::addEntryLink";
+
+    try
+    {
+        m_db.add_entry_link(parentTask->uuid, childTask->uuid, linkType);
+        LOGI(TAG, "Added entry link in database: <%s> --(%d)--> <%s>", parentTask->name, static_cast<int>(linkType), childTask->name);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to add entry link to database: %d", err);
+        return false;
+    }
+
+    // Update in-memory model
+    if (linkType == LinkType::DEPENDENCY)
+    {
+        parentTask->prerequisites.push_back(childTask);
+        LOGI(TAG, "Added dependency link in memory: <%s> depends on <%s>", parentTask->name, childTask->name);
+    }
+    else if (linkType == LinkType::HABIT_TRIGGER)
+    {
+        // For habit triggers, we might want to maintain a separate list or handle differently; for now we'll just log it
+        LOGI(TAG, "Added habit trigger link in memory: <%s> is triggered by <%s>", parentTask->name, childTask->name);
+    }
+    else
+    {
+        LOGW(TAG, "Unknown link type %d; no in-memory update performed", static_cast<int>(linkType));
+    }
+
+    return true;
+}
+
+bool CalendarRepository::removeEntryLink(Task *parentTask, Task *childTask, LinkType linkType)
+{
+    const char *TAG = "CalendarRepository::removeEntryLink";
+
+    try
+    {
+        m_db.remove_entry_link(parentTask->uuid, childTask->uuid, linkType);
+        LOGI(TAG, "Removed entry link in database: <%s> --(%d)--> <%s>", parentTask->name, static_cast<int>(linkType), childTask->name);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to remove entry link from database: %d", err);
+        return false;
+    }
+
+    // Update in-memory model
+    if (linkType == LinkType::DEPENDENCY)
+    {
+        parentTask->prerequisites.erase(std::remove(parentTask->prerequisites.begin(), parentTask->prerequisites.end(), childTask), parentTask->prerequisites.end());
+        LOGI(TAG, "Removed dependency link in memory: <%s> no longer depends on <%s>", parentTask->name, childTask->name);
+    }
+    else if (linkType == LinkType::HABIT_TRIGGER)
+    {
+        // For habit triggers, we might want to maintain a separate list or handle differently; for now we'll just log it
+        LOGI(TAG, "Removed habit trigger link in memory: <%s> is no longer triggered by <%s>", parentTask->name, childTask->name);
+    }
+    else
+    {
+        LOGW(TAG, "Unknown link type %d; no in-memory update performed", static_cast<int>(linkType));
+    }
+
+    return true;
+}
+
+void CalendarRepository::getLinkedEntries(Task *task)
+{
+    const char *TAG = "CalendarRepository::getLinkedEntries";
+    std::vector<char *> linkedUuid;
+
+    try
+    {
+        m_db.get_linked_entries(task->uuid, task->status == TaskStatus::HABIT ? LinkType::HABIT_TRIGGER : LinkType::DEPENDENCY, linkedUuid);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to load linked entries from database: %d", err);
+        return;
+    }
+
+    findTasksByList(linkedUuid, task->prerequisites);
+
+    // Cleanup linkedUuid strings
+    for (char *uuid : linkedUuid)
+    {
+        free(uuid);
+    }
 }
 
 /* ------------------------------- Taskblocks ------------------------------- */

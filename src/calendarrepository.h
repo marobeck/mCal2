@@ -23,8 +23,9 @@ public:
     void sortTimeblocks(); // sorts timeblocks in memory
     void sortTasks();      // sorts tasks within each timeblock in memory (not timeblocks)
     const std::vector<Timeblock> &timeblocks() const;
-    Task *findTaskByUuid(const char *uuid); // Recovers pointer to repository task by UUID
-    Timeblock *findTimeblockByUuid(const char *uuid); // Recovers pointer to repository timeblock by UUID
+    Task *findTaskByUuid(const char *uuid);                                                // Recovers pointer to repository task by UUID
+    void findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks); // Recovers pointers to repository tasks by list of UUIDs
+    Timeblock *findTimeblockByUuid(const char *uuid);                                      // Recovers pointer to repository timeblock by UUID
 
     /* ------------------------------ Load from DB ------------------------------ */
     // Load everything from DB into memory
@@ -50,6 +51,10 @@ public:
     bool addTimeblock(Timeblock &tb); // returns success
     bool removeTimeblock(const char *timeblockUuid);
     bool updateTimeblock(const Timeblock &tb); // persist updated timeblock
+    // Entry links
+    bool addEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY);    // Update database and in-memory model
+    bool removeEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY); // Update database and in-memory model
+    void getLinkedEntries(Task *task);                                                                 // Get linked tasks for a given task
 
 signals:
     // Notify listeners that the model has changed

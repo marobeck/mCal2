@@ -44,6 +44,10 @@ void generate_uuid(char *uuid_buf)
  * habit_entries:
  *  task_uuid (PK, FK)  - foreign key referencing parent habit
  *  date (PK)           - ISO 8601 date string (YYYY-MM-DD) representing a day the habit was completed
+ * entry_links (junction-table):
+ *  parent_uuid (PK)    - UUID of parent entry
+ *  child_uuid (PK)     - UUID of child entry
+ *  link_type           - type of link (dependency, habit triggers)
  */
 
 Database::Database()
@@ -87,7 +91,14 @@ Database::Database()
             task_uuid TEXT, \
             date TEXT, \
             PRIMARY KEY(task_uuid, date), \
-            FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE \
+            FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE); \
+        CREATE TABLE IF NOT EXISTS entry_links( \
+            parent_uuid TEXT, \
+            child_uuid TEXT, \
+            link_type INTEGER NOT NULL, \
+            PRIMARY KEY(parent_uuid, child_uuid), \
+            FOREIGN KEY(parent_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE, \
+            FOREIGN KEY(child_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE \
         );"};
 
     for (int i = 0; i < sizeof(sql) / sizeof(sql[0]); i++)
@@ -641,4 +652,93 @@ void Database::get_habit_entries(const char *task_uuid, std::vector<time_t> &out
     }
 
     sqlite3_finalize(stmt);
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Entry link data                              */
+/* -------------------------------------------------------------------------- */
+
+void Database::add_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type)
+{
+    const char *TAG = "DB::add_entry_link";
+
+    const char *sql = "INSERT INTO entry_links (parent_uuid, child_uuid, link_type) VALUES (?, ?, ?);";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, parent_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, child_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, static_cast<int>(link_type));
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc == SQLITE_DONE)
+    {
+        LOGI(TAG, "Added entry link from <%s> to <%s> with link type %d", parent_uuid, child_uuid, static_cast<int>(link_type));
+        return;
+    }
+    LOGE(TAG, "Failed to add entry link from <%s> to <%s>: %s", parent_uuid, child_uuid, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
+void Database::remove_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type)
+{
+    const char *TAG = "DB::remove_entry_link";
+
+    const char *sql = "DELETE FROM entry_links WHERE parent_uuid = ? AND child_uuid = ? AND link_type = ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, parent_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, child_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, static_cast<int>(link_type));
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc == SQLITE_DONE)
+    {
+        LOGI(TAG, "Removed entry link from <%s> to <%s> with link type %d", parent_uuid, child_uuid, static_cast<int>(link_type));
+        return;
+    }
+    LOGE(TAG, "Failed to remove entry link from <%s> to <%s>: %s", parent_uuid, child_uuid, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
+void Database::get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids)
+{
+    const char *TAG = "DB::get_linked_entries";
+
+    const char *sql = "SELECT child_uuid FROM entry_links WHERE parent_uuid = ? AND link_type = ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(link_type));
+
+    while (sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        const unsigned char *linked_uuid = sqlite3_column_text(stmt, 0);
+        if (linked_uuid)
+        {
+            outLinkedUuids.push_back(strdup(reinterpret_cast<const char *>(linked_uuid)));
+        }
+    }
+
+    sqlite3_finalize(stmt);
+    LOGI(TAG, "Found %zu linked entries for <%s> with link type %d", outLinkedUuids.size(), uuid, static_cast<int>(link_type));
 }
