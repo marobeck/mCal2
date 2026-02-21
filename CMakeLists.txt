@@ -24,3 +24,23 @@ target_link_libraries(${PROJECT_NAME} PRIVATE Qt5::Widgets SQLite::SQLite3 uuid)
 
 # Link headers
 target_include_directories(${PROJECT_NAME} PRIVATE src src/data src/database src/GUI src/GUI/widgets src/database)
+
+# --------------------------------------------------------------------------
+# Copy icons into build assets directory so 'build' can be deleted and recreated
+# --------------------------------------------------------------------------
+set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
+set(ASSETS_DST "${CMAKE_BINARY_DIR}/assets")
+if(EXISTS "${ASSETS_SRC}")
+    # Ensure destination exists at configure time (so running cmake creates the folder)
+    file(MAKE_DIRECTORY "${ASSETS_DST}")
+    # Copy contents now at configure time so assets are available immediately after cmake
+    file(COPY "${ASSETS_SRC}/" DESTINATION "${ASSETS_DST}")
+else()
+    message(WARNING "Asset source directory not found: ${ASSETS_SRC}. Skipping copy.")
+endif()
+
+# Also add a build-time target so assets are refreshed during 'cmake --build' or 'make'
+add_custom_target(copy_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory "${ASSETS_SRC}" "${ASSETS_DST}"
+    COMMENT "Copying icons/ -> ${ASSETS_DST}"
+)
