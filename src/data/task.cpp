@@ -351,10 +351,10 @@ inline float compute_deadline_pressure(time_t now, time_t due)
 float Task::get_urgency() const
 {
     // Constants
-    const float C = 0.5f;   // Undated pressure constant
-    const float w_p = 0.4f; // Priority weight
-    const float w_u = 0.4f; // Urgency/deadline pressure weight
-    const float w_e = 0.2f; // Effort/scope weight
+    const float C = g_score_weights.undated_pressure_constant; // Undated pressure constant
+    const float w_p = g_score_weights.priority_weight;         // Priority weight
+    const float w_u = g_score_weights.due_date_weight;         // Urgency/deadline pressure weight
+    const float w_e = g_score_weights.scope_weight;            // Effort/scope weight
 
     // Execptions
     if (priority == Priority::NONE)

@@ -21,6 +21,7 @@
 #include "entrydetailsview.h"
 #include "dayscheduleview.h"
 #include "overviewview.h"
+#include "settingsview.h"
 
 Q_DECLARE_METATYPE(const Task *)
 
@@ -84,6 +85,7 @@ public:
      * - Schedule view
      * - New entry view
      * - Entry details view
+     * - Settings view
      */
     OverviewView *overviewView;
     QStackedWidget *leftStack;
@@ -91,6 +93,8 @@ public:
     NewEntryView *newEntryView;
     NewTimeblockView *newTimeblockView;
     EntryDetailsView *entryDetailsView;
+
+    SettingsView *settingsView;
 
     /** Right panel scenes
      * - Timeblock todo list view

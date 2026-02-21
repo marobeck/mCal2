@@ -8,6 +8,16 @@
 #include "defs.h"
 #include "goalspec.h"
 
+struct ScoreWeights
+{
+    float due_date_weight = 1.0f;           // w_u
+    float priority_weight = 1.0f;           // w_p
+    float scope_weight = 1.0f;              // w_e
+    float undated_pressure_constant = 0.3f; // C
+};
+
+extern ScoreWeights g_score_weights;
+
 enum class LinkType
 {
     DEPENDENCY = 0,

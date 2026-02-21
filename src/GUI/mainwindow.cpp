@@ -70,6 +70,7 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     newEntryView = new NewEntryView(leftStack);
     newTimeblockView = new NewTimeblockView(leftStack);
     entryDetailsView = new EntryDetailsView(leftStack);
+    settingsView = new SettingsView(leftStack);
 
     // Add schedule + detail/edit views to left stack
     leftStack->addWidget(overviewView);     // index 0
@@ -77,6 +78,7 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     leftStack->addWidget(entryDetailsView); // index 2
     leftStack->addWidget(newEntryView);     // index 3
     leftStack->addWidget(newTimeblockView); // index 4
+    leftStack->addWidget(settingsView);     // index 5
 
     leftStack->setCurrentWidget(overviewView);
 
@@ -105,10 +107,11 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "schedule.png"), Scene::DaySchedule);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_timeblock.png"), Scene::NewTimeblock);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_entry.png"), Scene::NewEntry);
+    leftEdgeLayout->addStretch();
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "settings.png"), Scene::Settings);
 
     addRightEdgeButton(QIcon(ASSET_FOLDER + "todo_list.png"), Scene::TodoList);
     // Force everything to the top
-    leftEdgeLayout->addStretch();
     rightEdgeLayout->addStretch();
 
     // Update the views with the current model
@@ -376,7 +379,11 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         leftStack->setCurrentWidget(entryDetailsView);
         currentLeftScene = Scene::EntryDetails;
         break;
-
+        
+    case Scene::Settings:
+        leftStack->setCurrentWidget(settingsView);
+        currentLeftScene = Scene::Settings;
+        break;
     default:
         leftStack->setCurrentWidget(scheduleView);
         currentLeftScene = Scene::DaySchedule;
