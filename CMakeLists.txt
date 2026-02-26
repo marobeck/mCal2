@@ -29,7 +29,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE src src/data src/database src
 # Copy icons into build assets directory so 'build' can be deleted and recreated
 # --------------------------------------------------------------------------
 set(ASSETS_SRC "${CMAKE_SOURCE_DIR}/assets")
-set(ASSETS_DST "${CMAKE_BINARY_DIR}/assets")
+set(ASSETS_DST "${PROJECT_BINARY_DIR}/assets")
 if(EXISTS "${ASSETS_SRC}")
     # Ensure destination exists at configure time (so running cmake creates the folder)
     file(MAKE_DIRECTORY "${ASSETS_DST}")
