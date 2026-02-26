@@ -26,7 +26,7 @@
 #include <string>
 
 // Asset folder for icons (used in official builds)
-#if 0
+#if 1
 const QString ASSET_FOLDER = "assets/";
 #else
 const QString ASSET_FOLDER = "../icons/";
@@ -287,6 +287,8 @@ void MainWindow::switchRightPanel(Scene scene, QVariant data)
     case Scene::TodoList:
         rightStack->setCurrentWidget(todoListView);
         currentRightScene = Scene::TodoList;
+        // Update the todo list
+        modelChanged();
         break;
     case Scene::NewEntryLink:
         // Show the todo list but mark the right scene as NewEntryLink so
@@ -379,7 +381,7 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         leftStack->setCurrentWidget(entryDetailsView);
         currentLeftScene = Scene::EntryDetails;
         break;
-        
+
     case Scene::Settings:
         leftStack->setCurrentWidget(settingsView);
         currentLeftScene = Scene::Settings;
@@ -429,7 +431,6 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
 
     repo->addTask(*task, timeblockIndex);
 
-    // We copied the Task into the Timeblock, so free the heap allocation
     // Find if a prerequisite was selected in NewEntryView and create the entry link
     std::string prereq = newEntryView->takePrereqUuid();
     if (!prereq.empty())
@@ -445,8 +446,12 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
         {
             LOGW(TAG, "Could not create entry link: parent or child task not found in repo");
         }
+
+        // Refresh the todo list to show the new link
+        modelChanged();
     }
 
+    // We copied the Task into the Timeblock, so free the heap allocation
     delete task;
 }
 
@@ -455,6 +460,31 @@ void MainWindow::onTaskEdited(Task *task)
     const char *TAG = "MainWindow::onTaskEdited";
 
     LOGI(TAG, "Task <%s> edited", task->name);
+
+    // Update prerequisite links by rebuilding them
+
+    // Save new links
+    std::vector<Task *> newPrereqs;
+    std::string prereqUuid = newEntryView->takePrereqUuid();
+    if (!prereqUuid.empty())
+    {
+        Task *prereqTask = repo->findTaskByUuid(prereqUuid.c_str());
+        if (prereqTask)
+        {
+            newPrereqs.push_back(prereqTask);
+        }
+        else
+        {
+            LOGW(TAG, "Could not find prerequisite task with UUID %s", prereqUuid.c_str());
+        }
+    }
+
+    // Remove existing links
+    repo->removeAllLinksForTask(task);
+    for (Task *prereq : newPrereqs)
+    {
+        repo->addEntryLink(task, prereq);
+    }
 
     if (!repo->updateTask(*task))
     {
