@@ -7,6 +7,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include "widgets/habitprogresswidget.h"
+#include "widgets/taskitemwidget.h"
 
 EntryDetailsView::EntryDetailsView(QWidget *parent)
     : QWidget(parent)
@@ -28,12 +29,17 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     m_urgencyLabel = new QLabel("", this);
     layout->addWidget(m_urgencyLabel);
 
-    m_prereqLabel = new QLabel("", this);
-    layout->addWidget(m_prereqLabel);
-
     m_descLabel = new QLabel("", this);
     m_descLabel->setWordWrap(true);
     layout->addWidget(m_descLabel);
+
+    // Prerequisite list container (compact-mode TaskItemWidgets)
+    m_prereqList = new QListWidget(this);
+    m_prereqList->setStyleSheet("QListWidget { background: transparent; border: none; }");
+    m_prereqList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    m_prereqList->setVisible(false); // hidden until prerequisites exist
+    layout->addWidget(m_prereqList);
 
     // Habit progress widget (created but hidden until a habit is loaded)
     m_habitProgress = new HabitProgressWidget(this);
@@ -96,7 +102,6 @@ void EntryDetailsView::loadTask(const Task *task)
         m_dueLabel->setText("");
         m_priorityLabel->setText("");
         m_urgencyLabel->setText("");
-        m_prereqLabel->setText("");
         m_currentTaskUuid.clear();
         m_deleteBtn->setEnabled(false);
         m_moveBtn->setEnabled(false);
@@ -147,11 +152,28 @@ void EntryDetailsView::loadTask(const Task *task)
         m_urgencyLabel->setText("Urgency: (n/a)");
     }
 
-    // Prerequisite task title if present
-    if (task->prereq && task->prereq->name)
-        m_prereqLabel->setText(QString::fromUtf8(task->prereq->name));
-    else
-        m_prereqLabel->setText("");
+    // Prerequisites: show compact widgets for each prereq task (if any)
+    // Update the list widget with the top tasks
+    m_prereqList->clear();
+
+    bool hasPrereqs = false;
+    if (!task->prerequisites.empty())
+    {
+        for (Task *p : task->prerequisites)
+        {
+            if (!p)
+                continue;
+            QListWidgetItem *item = new QListWidgetItem(m_prereqList);
+            // Display item in preview mode
+            TaskItemWidget *widget = new TaskItemWidget(*p, nullptr, this, TaskItemWidget::Mode::PREVIEW);
+            item->setSizeHint(widget->sizeHint());
+            m_prereqList->addItem(item);
+            m_prereqList->setItemWidget(item, widget);
+        }
+        hasPrereqs = true;
+    }
+
+    m_prereqList->setVisible(hasPrereqs);
 
     // Habit data
     if (task->status == TaskStatus::HABIT)

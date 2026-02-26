@@ -89,6 +89,10 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
         // In preview mode, we want to disable interaction and just show a static snapshot of the task
         m_doneCheck->setEnabled(false);
     }
+    else
+    {
+        m_doneCheck->setEnabled(true);
+    }
 
     layout->addLayout(topRow);
 

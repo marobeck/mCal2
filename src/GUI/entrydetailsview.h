@@ -5,6 +5,8 @@
 #include "task.h"
 
 #include <QPushButton>
+#include <QVBoxLayout>
+#include <QListWidget>
 #include <QString>
 #include "widgets/habitprogresswidget.h"
 
@@ -30,7 +32,8 @@ private:
     QLabel *m_dueLabel = nullptr;
     QLabel *m_priorityLabel = nullptr;
     QLabel *m_urgencyLabel = nullptr;
-    QLabel *m_prereqLabel = nullptr;
+    // Prerequisite list container (compact-mode TaskItemWidgets)
+    QListWidget *m_prereqList = nullptr;
     // Habit functions
     QPushButton *m_addHabitEntryBtn = nullptr;
     HabitProgressWidget *m_habitProgress = nullptr;

@@ -25,6 +25,9 @@ CalendarRepository::~CalendarRepository()
 
 void CalendarRepository::loadAll()
 {
+    const char *TAG = "CalendarRepository::loadAll";
+    LOGI(TAG, "Loading all timeblocks and tasks from database...");
+
     // Clear current in-memory model
     m_timeblocks.clear();
 
@@ -38,16 +41,6 @@ void CalendarRepository::loadAll()
     {
         m_db.load_tasks(&tb);
 
-        // Load linked tasks for each task
-        for (auto &task : tb.tasks)
-        {
-            getLinkedEntries(&task);
-        }
-
-        // Sort tasks within this timeblock by descending urgency (highest urgency first)
-        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
-                  { return a.get_urgency() > b.get_urgency(); });
-
         // Load habit preview for any habit tasks
         for (auto &task : tb.tasks)
         {
@@ -57,6 +50,21 @@ void CalendarRepository::loadAll()
                 habitCompletionPreview(task);
             }
         }
+    }
+
+    // Now that all tasks are loaded, load linked entries for each task
+    // Use that as a factor to sort tasks within each timeblock by urgency
+    for (auto &tb : m_timeblocks)
+    {
+        // Load linked tasks for each task
+        for (auto &task : tb.tasks)
+        {
+            getLinkedEntries(&task);
+        }
+
+        // Sort tasks within this timeblock by descending urgency (highest urgency first)
+        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
+                  { return a.get_urgency() > b.get_urgency(); });
     }
 }
 
@@ -841,6 +849,11 @@ void CalendarRepository::getLinkedEntries(Task *task)
     for (char *uuid : linkedUuid)
     {
         free(uuid);
+    }
+
+    for (Task *prereq : task->prerequisites)
+    {
+        LOGI(TAG, "Loaded linked task <%s> (%s) for task <%s>", prereq->name, prereq->uuid, task->name);
     }
 }
 

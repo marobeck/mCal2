@@ -763,9 +763,9 @@ void Database::get_linked_entries(const char *uuid, LinkType link_type, std::vec
         if (linked_uuid)
         {
             outLinkedUuids.push_back(strdup(reinterpret_cast<const char *>(linked_uuid)));
+            LOGI(TAG, "Found linked entry <%s> with link type %d", linked_uuid, static_cast<int>(link_type));
         }
     }
 
     sqlite3_finalize(stmt);
-    LOGI(TAG, "Found %zu linked entries for <%s> with link type %d", outLinkedUuids.size(), uuid, static_cast<int>(link_type));
 }
