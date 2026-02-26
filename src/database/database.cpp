@@ -714,6 +714,33 @@ void Database::remove_entry_link(const char *parent_uuid, const char *child_uuid
     throw sqlite3_errcode(db);
 }
 
+void Database::remove_all_links_for_task(const char *task_uuid)
+{
+    const char *TAG = "DB::remove_all_links_for_task";
+
+    const char *sql = "DELETE FROM entry_links WHERE parent_uuid = ? OR child_uuid = ?;";
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, task_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task_uuid, -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc == SQLITE_DONE)
+    {
+        LOGI(TAG, "Removed all entry links for task <%s>", task_uuid);
+        return;
+    }
+    LOGE(TAG, "Failed to remove entry links for task <%s>: %s", task_uuid, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
 void Database::get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids)
 {
     const char *TAG = "DB::get_linked_entries";

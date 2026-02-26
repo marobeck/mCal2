@@ -55,6 +55,7 @@ public:
     bool addEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY);    // Update database and in-memory model
     bool removeEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY); // Update database and in-memory model
     void getLinkedEntries(Task *task);                                                                 // Get linked tasks for a given task
+    bool removeAllLinksForTask(Task *task);                                                            // Remove all links for a given task
 
 signals:
     // Notify listeners that the model has changed

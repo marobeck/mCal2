@@ -413,22 +413,38 @@ bool CalendarRepository::updateTask(const Task &task)
     // Update existing task data
     *existingTask = task;
 
-    // Adjust location in timeblock based on urgency
+    // --- Adjust location in timeblock based on urgency ---
+
+    // Single item list, no move needed
+    if (parentTimeblock->tasks.size() == 1)
+    {
+        LOGI(TAG, "Only one active task in timeblock <%s>, no move needed", parentTimeblock->name);
+        emit modelChanged();
+        return true;
+    }
+
     float taskUrgency = task.get_urgency();
     for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
     {
-        float u = parentTimeblock->tasks[i].get_urgency();
-        if (taskUrgency > u || u < 0.00001f)
+        // Determine if task should be moved ahead of task at index i based on urgency
+        float u_nxt = parentTimeblock->tasks[i + 1].get_urgency();
+        if (taskUrgency > u_nxt || u_nxt < 0.00001f)
         {
-            if (i == taskIdx && parentTimeblock->tasks.size() > 1)
-            {
-                // No move needed
+            // If we are already at this position, no move needed
+            if (i == taskIdx)
                 break;
-            }
             // Move task to this position
             parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
             parentTimeblock->tasks.insert(parentTimeblock->tasks.begin() + i, task);
             LOGI(TAG, "Moved task <%s> (%0.2f) to position %zu in timeblock <%s>", task.name, taskUrgency, i, parentTimeblock->name);
+            break;
+        }
+        // If we reached the end and task is least urgent, move to end
+        if (i == parentTimeblock->tasks.size() - 1)
+        {
+            parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
+            parentTimeblock->tasks.push_back(task);
+            LOGI(TAG, "Moved task <%s> (%0.2f) to end of timeblock <%s>", task.name, taskUrgency, parentTimeblock->name);
             break;
         }
     }
@@ -772,6 +788,35 @@ bool CalendarRepository::removeEntryLink(Task *parentTask, Task *childTask, Link
         LOGW(TAG, "Unknown link type %d; no in-memory update performed", static_cast<int>(linkType));
     }
 
+    return true;
+}
+
+bool CalendarRepository::removeAllLinksForTask(Task *task)
+{
+    const char *TAG = "CalendarRepository::removeAllLinksForTask";
+
+    try
+    {
+        m_db.remove_all_links_for_task(task->uuid);
+        LOGI(TAG, "Removed all entry links for task <%s> from database", task->name);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to remove all entry links for task from database: %d", err);
+        return false;
+    }
+
+    // --- Update in-memory model ---
+
+    // Find and remove all links where this task is the parent
+    for (Task *prereq : task->prerequisites)
+    {
+        prereq->prerequisites.erase(std::remove(prereq->prerequisites.begin(), prereq->prerequisites.end(), task), prereq->prerequisites.end());
+        LOGI(TAG, "Removed prerequisite link in memory: <%s> no longer depends on <%s>", prereq->name, task->name);
+    }
+
+    task->prerequisites.clear();
+    LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
     return true;
 }
 

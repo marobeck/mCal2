@@ -46,5 +46,6 @@ public:
     // -------------------------------------- Entry Link Data ----------------------------------------
     void add_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
     void remove_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void remove_all_links_for_task(const char *task_uuid);
     void get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids);
 };

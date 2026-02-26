@@ -378,6 +378,15 @@ void NewEntryView::loadTaskForEditing(Task *task)
             m_undatedCheck->setChecked(false);
         }
     }
+
+    // Prerequisite preview
+    LOGI(TAG, "Task has %zu prerequisites", task->prerequisites.size());
+    if (!task->prerequisites.empty())
+    { // For simplicity, only preview the first prerequisite if multiple are present
+        const char *prereqName = task->prerequisites[0]->name ? task->prerequisites[0]->name : "(null)";
+        LOGI(TAG, "Previewing prerequisite task: %s", prereqName);
+        previewPrerequisite(task->prerequisites[0]);
+    }
 }
 
 void NewEntryView::onTypeChanged(int index)
