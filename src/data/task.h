@@ -85,7 +85,6 @@ public:
     // --- Descriptive fields ---
     char *name = NULL;   // Title of entry
     char *desc = NULL;   // Verbose description of entry
-    Task *prereq = NULL; // Task that must be completed prior to completing this one.
 
     // --- Constructors ---
 
