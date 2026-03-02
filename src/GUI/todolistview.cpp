@@ -47,12 +47,7 @@ TodoListView::TodoListView(QWidget *parent, CalendarRepository *dataRepo)
     scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     scrollArea->setWidget(todoContainer);
 
-    // Final placement beside the schedule
-    // Put the todo container inside the scroll area and add that to this
-    // widget's root layout. Do NOT add `todoLayout` directly to the
-    // root layout because `todoLayout` already has `todoContainer` as
-    // its parent (which causes the "layout already has a parent"
-    // warning).
+    // Final placement beside the scheduleview (which is in the main window's central widget)
     QHBoxLayout *rootLayout = new QHBoxLayout(this);
     rootLayout->addWidget(scrollArea, 3);
 
@@ -169,28 +164,14 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         colLayout->addWidget(titleRow);
 
         // --- Todo list ---
-        QListWidget *list = new QListWidget(this);
-        list->setSelectionMode(QAbstractItemView::SingleSelection);
-        list->setMinimumWidth(300);
-        list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-        connect(list, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
+        QListWidget *todoList = new QListWidget(this);
+        todoList->setSelectionMode(QAbstractItemView::SingleSelection);
+        todoList->setMinimumWidth(300);
+        todoList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        connect(todoList, &QListWidget::currentItemChanged, this, &TodoListView::onListCurrentItemChanged);
 
-        for (auto &task : tb.tasks)
-        {
-            QListWidgetItem *item = new QListWidgetItem(list);
-            TaskItemWidget *widget = new TaskItemWidget(task, repo);
-
-            item->setSizeHint(widget->sizeHint());
-            list->addItem(item);
-            list->setItemWidget(item, widget);
-            if (task.status == TaskStatus::HABIT)
-            {
-                repo->habitCompletionPreview(const_cast<Task &>(task));
-            }
-        }
-
-        colLayout->addWidget(list);
-        colLayout->setStretchFactor(list, 1);
+        colLayout->addWidget(todoList);
+        colLayout->setStretchFactor(todoList, 1);
 
         // --- Archived tasks (collapsed by default) ---
         QWidget *archivedWrapper = new QWidget(this);
@@ -212,14 +193,33 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
         archivedList->setVisible(false);
         archLayout->addWidget(archivedList);
 
-        // Populate archived list items
-        for (auto &at : tb.archived_tasks)
+        // Populate lists
+        for (auto *task : tb.tasks)
         {
-            QListWidgetItem *aitem = new QListWidgetItem(archivedList);
-            TaskItemWidget *awidget = new TaskItemWidget(at, repo);
-            aitem->setSizeHint(awidget->sizeHint());
-            archivedList->addItem(aitem);
-            archivedList->setItemWidget(aitem, awidget);
+            if (!task)
+            {
+                LOGW(TAG, "Encountered null task pointer in timeblock '%s'; skipping.", tb.name);
+                continue;
+            }
+
+            QListWidgetItem *item = new QListWidgetItem();
+            TaskItemWidget *widget = new TaskItemWidget(task, repo);
+
+            item->setSizeHint(widget->sizeHint());
+            if (task->status != TaskStatus::COMPLETE)
+            {
+                todoList->addItem(item);
+                todoList->setItemWidget(item, widget);
+                if (task->status == TaskStatus::HABIT)
+                {
+                    repo->habitCompletionPreview(*task);
+                }
+            }
+            else
+            {
+                archivedList->addItem(item);
+                archivedList->setItemWidget(item, widget);
+            }
         }
 
         // Button shown when archived is collapsed; placed at bottom via stretch
@@ -240,7 +240,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             archivedList->setVisible(true);
             collapseArchivedBtn->setVisible(true);
             // Give equal vertical space to active and archived lists
-            int listIndex = colLayout->indexOf(list);
+            int listIndex = colLayout->indexOf(todoList);
             int archIndex = colLayout->indexOf(archivedWrapper);
             if (listIndex >= 0 && archIndex >= 0)
             {
@@ -256,7 +256,7 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
             archivedWrapper->setVisible(false);
             showArchivedBtn->setVisible(true);
             // Restore stretch so main list takes natural space
-            int listIndex = colLayout->indexOf(list);
+            int listIndex = colLayout->indexOf(todoList);
             int archIndex = colLayout->indexOf(archivedWrapper);
             if (listIndex >= 0 && archIndex >= 0)
             {
@@ -264,8 +264,8 @@ void TodoListView::updateTasklists(const std::vector<Timeblock> &timeblocks)
                 colLayout->setStretch(archIndex, 0);
             } });
 
-        // Track list for your backend
-        todoLists.append(list);
+        // Track list for backend
+        todoLists.append(todoList);
 
         // Add column to main horizontal layout
         todoLayout->addWidget(column);
