@@ -164,8 +164,8 @@ void EntryDetailsView::loadTask(const Task *task)
             if (!p)
                 continue;
             QListWidgetItem *item = new QListWidgetItem(m_prereqList);
-            // Display item in preview mode
-            TaskItemWidget *widget = new TaskItemWidget(*p, nullptr, this, TaskItemWidget::Mode::PREVIEW);
+            // Display item in preview mode (no modifications can be made from here, so we don't need repo reference)
+            TaskItemWidget *widget = new TaskItemWidget(p, nullptr, this, TaskItemWidget::Mode::PREVIEW);
             item->setSizeHint(widget->sizeHint());
             m_prereqList->addItem(item);
             m_prereqList->setItemWidget(item, widget);
