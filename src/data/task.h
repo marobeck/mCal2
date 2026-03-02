@@ -3,9 +3,26 @@
 #include <ctime>
 #include <string>
 #include <sqlite3.h>
+#include <vector>
 
-#include "defs.h"
+#include "uuid.h"
 #include "goalspec.h"
+
+struct ScoreWeights
+{
+    float due_date_weight = 1.0f;           // w_u
+    float priority_weight = 1.0f;           // w_p
+    float scope_weight = 1.0f;              // w_e
+    float undated_pressure_constant = 0.3f; // C
+};
+
+extern ScoreWeights g_score_weights;
+
+enum class LinkType
+{
+    DEPENDENCY = 0,
+    HABIT_TRIGGER = 1
+};
 
 enum class Priority
 {
@@ -15,6 +32,16 @@ enum class Priority
     MEDIUM = 4,
     HIGH = 5,
     VERY_HIGH = 7
+};
+
+enum class Scope
+{
+    NONE = -1,
+    XS = 1,
+    S = 2,
+    M = 3,
+    L = 4,
+    XL = 5
 };
 
 enum class TaskStatus
@@ -31,16 +58,22 @@ enum class TaskStatus
 class Task
 {
 public:
+    /* ------------------------------- Data feilds ------------------------------ */
     // --- Location ---
     // Used for database fetching
-    char uuid[UUID_LEN]; // UUID string of entry
-    char timeblock_uuid[UUID_LEN];
+    UUID uuid;           // UUID of entry
+    UUID timeblock_uuid; // UUID of parent timeblock
 
     // --- Task Urgency ---
 
     time_t due_date = 0;                        // Due date, 0 = undated
     Priority priority = Priority::NONE;         // Priority
+    Scope scope = Scope::NONE;                  // User-defined estimate of how much effort/time would be required to get this task done (XS -> XL)
     TaskStatus status = TaskStatus::INCOMPLETE; // Completion status of the entry
+    time_t completed_datetime = 0;              // Time since epoch when task was completed; 0 if not completed
+
+    // Prerequisite task(s) that must be completed before this one can be completed; empty if no prerequisite
+    std::vector<Task *> prerequisites;
 
     // --- Habit parameters ---
 
@@ -51,14 +84,24 @@ public:
     TaskStatus completed_days[10];
 
     // --- Descriptive fields ---
-    char *name = NULL;   // Title of entry
-    char *desc = NULL;   // Verbose description of entry
-    Task *prereq = NULL; // Task that must be completed prior to completing this one.
+    char *name = NULL; // Title of entry
+    char *desc = NULL; // Verbose description of entry
 
+    /* -------------------------------- Functions ------------------------------- */
     // --- Constructors ---
 
     Task() = default;
     Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, uint8_t frequency_ = 0);
+
+    // custom copy semantics to manage heap-allocated strings
+    Task(const Task &other);
+    Task &operator=(const Task &other);
+
+    // defaulted move operations are safe since we take ownership of pointers
+    Task(Task &&) noexcept = default;
+    Task &operator=(Task &&) noexcept = default;
+
+    ~Task();
 
     // --- Setters ---
 
@@ -71,11 +114,22 @@ public:
      */
     float get_urgency() const;
 
+    time_t get_completed_time() const
+    {
+        return completed_datetime;
+    }
+
     /**
      * Provide due date as a string
      */
     std::string due_date_full_string() const;
     std::string due_date_string() const;
+
+    /**
+     * Get scope as string
+     */
+    std::string scope_string() const;
+    char scope_char() const;
 
     /**
      * Get priority as string

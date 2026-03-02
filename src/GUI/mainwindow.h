@@ -20,6 +20,8 @@
 #include "newtimeblockview.h"
 #include "entrydetailsview.h"
 #include "dayscheduleview.h"
+#include "overviewview.h"
+#include "settingsview.h"
 
 Q_DECLARE_METATYPE(const Task *)
 
@@ -28,11 +30,18 @@ Q_DECLARE_METATYPE(const Task *)
  */
 enum class Scene
 {
+    // --- Entry views ---
     TodoList,
+    Overview,
     DaySchedule,
-    NewEntry,
-    NewTimeblock,
     EntryDetails,
+
+    // --- Entry management ---
+    NewEntry,
+    NewEntryLink, // Special state for new entry view, allowing for tasks to be selected in entry views
+    NewTimeblock,
+
+    // --- Settings ---
     Settings
 };
 
@@ -54,6 +63,7 @@ public slots:
     void switchLeftPanel(Scene scene, QVariant data = {});
 
     // Run updates
+    void onTaskSelected(const Task *task);
     void onTaskCreated(Task *task, int timeblockIndex);
     void onTaskEdited(Task *task);
     void onTimeblockCreated(Timeblock *timeblock);
@@ -69,17 +79,22 @@ public:
     CalendarRepository *repo = nullptr;
 
     // --- Scenes ---
-    DayScheduleView *scheduleView;
 
     /** Left panel scenes
+     * - Overview
      * - Schedule view
      * - New entry view
      * - Entry details view
+     * - Settings view
      */
+    OverviewView *overviewView;
     QStackedWidget *leftStack;
+    DayScheduleView *scheduleView;
     NewEntryView *newEntryView;
     NewTimeblockView *newTimeblockView;
     EntryDetailsView *entryDetailsView;
+
+    SettingsView *settingsView;
 
     /** Right panel scenes
      * - Timeblock todo list view

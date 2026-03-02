@@ -4,6 +4,7 @@
 #include <vector>
 #include <stdint.h>
 
+#include "uuid.h"
 #include "goalspec.h"
 #include "task.h"
 
@@ -34,7 +35,7 @@ class Timeblock
 public:
     // --- Location ---
     // Used for database fetching
-    char uuid[UUID_LEN];
+    UUID uuid; // UUID of entry
 
     // --- Event functionality ---
 
@@ -44,30 +45,21 @@ public:
     time_t day_start;       // For weekly events; Time since start of day
 
     char *name, *desc;
-    std::vector<Task> tasks;
-    std::vector<Task> archived_tasks; // Completed tasks moved here
+    std::vector<Task *> tasks;
 
     TimeblockStatus status = TimeblockStatus::ONGOING;
+    time_t completed_datetime = 0; // Time since epoch when timeblock was completed; 0 if not completed
 
     Timeblock() = default;
     Timeblock(const char *name, const char *desc, uint8_t day_flags, time_t duration, time_t start_or_day_start);
 
     // --- Add data ---
 
-    void append(Task &e)
+    void append(Task *e)
     {
-        // Notify task of its parent timeblock
-        e.set_timeblock_uuid(uuid);
-
+        /// Tasks know which timeblock they belong to via their timeblock_uuid field
+        /// and persist in memory on the heap, so we can just store pointers to them in the timeblock's task list.
         tasks.push_back(e);
-    }
-
-    void append_archived(Task &e)
-    {
-        // Notify task of its parent timeblock
-        e.set_timeblock_uuid(uuid);
-
-        archived_tasks.push_back(e);
     }
 
     // --- Get data ---
@@ -83,4 +75,7 @@ public:
      * Get weight multiplier for status
      */
     float status_weight(TimeblockStatus s) const;
+
+    // --- DEBUG ---
+    void print() const;
 };

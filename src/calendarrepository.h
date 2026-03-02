@@ -6,7 +6,10 @@
 #include <vector>
 #include <functional>
 #include <QObject>
+#include <unordered_map>
+#include <memory>
 
+#include "uuid.h"
 #include "database.h"
 #include "timeblock.h"
 #include "task.h"
@@ -19,16 +22,21 @@ public:
     CalendarRepository();
     ~CalendarRepository();
 
-    /* ---------------------------- In memory access ---------------------------- */
-    void sortTimeblocks(); // sorts timeblocks in memory
-    void sortTasks();      // sorts tasks within each timeblock in memory (not timeblocks)
+    /* ---------------------------------- Accessors --------------------------------- */
+    // Must be const since they are used by views to read data without modifying it
     const std::vector<Timeblock> &timeblocks() const;
-    Task *findTaskByUuid(const char *uuid); // Recovers pointer to repository task by UUID
-    Timeblock *findTimeblockByUuid(const char *uuid); // Recovers pointer to repository timeblock by UUID
+    const TaskHash &tasks() const;
+    /* ---------------------------- In memory access ---------------------------- */
+    void sortTimeblocks();                                                                 // sorts timeblocks in memory
+    void sortTasks(std::vector<Task *> &tasks);                                            // sorts tasks within each timeblock in memory (not timeblocks)
+    Task *findTaskByUuid(const char *uuid);                                                // Recovers pointer to repository task by UUID
+    void findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks); // Recovers pointers to repository tasks by list of UUIDs
+    Timeblock *findTimeblockByUuid(const char *uuid);                                      // Recovers pointer to repository timeblock by UUID
 
     /* ------------------------------ Load from DB ------------------------------ */
     // Load everything from DB into memory
     void loadAll();
+    std::vector<Task *> getTasksForTimeblock(const UUID &timeblockUuid); // Load tasks for a specific timeblock into provided vector
     // --- Getters ---
     void habitCompletionPreview(Task &task); // fills task.completed_days with recent completions
     void habitCompletionStats(const char *taskUuid, std::vector<time_t> &completionDates);
@@ -37,7 +45,7 @@ public:
     // Tasks
     bool addTask(Task &task, size_t timeblockIndex);                // returns success
     bool removeTask(const char *taskUuid);                          // Delete task by UUID
-    bool updateTask(const Task &task);                              // persist updated task
+    bool updateTask(const Task &task);                                     // persist updated task
     bool moveTask(const char *taskUuid, const char *timeblockUuid); // move task to different timeblock
     // Habits
     bool addHabitEntry(const char *taskUuid, const char *dateIso8601);
@@ -50,12 +58,20 @@ public:
     bool addTimeblock(Timeblock &tb); // returns success
     bool removeTimeblock(const char *timeblockUuid);
     bool updateTimeblock(const Timeblock &tb); // persist updated timeblock
+    // Entry links
+    bool addEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY);    // Update database and in-memory model
+    bool removeEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY); // Update database and in-memory model
+    void getLinkedEntries(Task *task);                                                                 // Get linked tasks for a given task
+    bool removeAllLinksForTask(Task *task);                                                            // Remove all links for a given task
 
 signals:
     // Notify listeners that the model has changed
     void modelChanged();
 
 private:
-    Database m_db;                       //  DB interface
-    std::vector<Timeblock> m_timeblocks; // in-memory model
+    Database m_db; //  DB interface
+
+    // All tasks are stored in hash map for O(1) access by UUID, timeblocks store pointers to their tasks for organization
+    TaskHash m_tasks;                    // In-memory model of tasks, keyed by UUID for fast lookup
+    std::vector<Timeblock> m_timeblocks; // In-memory model of timeblocks (does not own tasks, just organizes them)
 };

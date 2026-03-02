@@ -11,18 +11,66 @@
 
 Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, uint8_t frequency_)
 {
-    generate_uuid(uuid);
+    generate_uuid(uuid.value);
     name = strdup(name_);
     desc = strdup(desc_);
 
-    std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
+    std::memset(timeblock_uuid.value, 0, sizeof(timeblock_uuid.value));
     std::memset(completed_days, 0, sizeof(completed_days));
 
     due_date = due_date_;
     priority = priority_;
     status = TaskStatus::INCOMPLETE;
+    completed_datetime = 0;
     goal_spec = GoalSpec::from_sql(frequency_);
     LOGI("Task::Constructor", "Created task <%s> with frequency %d", name, frequency_);
+}
+
+// Copy constructor: deep-copy heap strings and other fields
+Task::Task(const Task &other)
+{
+    uuid = other.uuid;
+    timeblock_uuid = other.timeblock_uuid;
+    due_date = other.due_date;
+    priority = other.priority;
+    scope = other.scope;
+    status = other.status;
+    completed_datetime = other.completed_datetime;
+    prerequisites = other.prerequisites;
+    goal_spec = other.goal_spec;
+    std::memcpy(completed_days, other.completed_days, sizeof(completed_days));
+    name = other.name ? strdup(other.name) : nullptr;
+    desc = other.desc ? strdup(other.desc) : nullptr;
+}
+
+// Copy assignment operator
+Task &Task::operator=(const Task &other)
+{
+    if (this != &other)
+    {
+        free(name);
+        free(desc);
+        uuid = other.uuid;
+        timeblock_uuid = other.timeblock_uuid;
+        due_date = other.due_date;
+        priority = other.priority;
+        scope = other.scope;
+        status = other.status;
+        completed_datetime = other.completed_datetime;
+        prerequisites = other.prerequisites;
+        goal_spec = other.goal_spec;
+        std::memcpy(completed_days, other.completed_days, sizeof(completed_days));
+        name = other.name ? strdup(other.name) : nullptr;
+        desc = other.desc ? strdup(other.desc) : nullptr;
+    }
+    return *this;
+}
+
+Task::~Task()
+{
+    free(name);
+    free(desc);
+    // Prerequisites are not owned by Task, so we don't free them either
 }
 
 /* -------------------------------------------------------------------------- */
@@ -68,25 +116,25 @@ void Task::update_due_date()
     switch (wday)
     {
     case 0:
-        day_flag = SUNDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Sunday);
         break;
     case 1:
-        day_flag = MONDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Monday);
         break;
     case 2:
-        day_flag = TUESDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Tuesday);
         break;
     case 3:
-        day_flag = WEDNESDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Wednesday);
         break;
     case 4:
-        day_flag = THURSDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Thursday);
         break;
     case 5:
-        day_flag = FRIDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Friday);
         break;
     case 6:
-        day_flag = SATURDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Saturday);
         break;
     }
 
@@ -215,6 +263,44 @@ std::string Task::due_date_string() const
     }
 }
 
+std::string Task::scope_string() const
+{
+    switch (scope)
+    {
+    case Scope::XS:
+        return "XS";
+    case Scope::S:
+        return "S";
+    case Scope::M:
+        return "M";
+    case Scope::L:
+        return "L";
+    case Scope::XL:
+        return "XL";
+    default:
+        return "Unknown";
+    }
+}
+
+char Task::scope_char() const
+{
+    switch (scope)
+    {
+    case Scope::XS:
+        return 's';
+    case Scope::S:
+        return 'S';
+    case Scope::M:
+        return 'M';
+    case Scope::L:
+        return 'L';
+    case Scope::XL:
+        return 'X';
+    default:
+        return '?';
+    }
+}
+
 std::string Task::priority_string() const
 {
     switch (priority)
@@ -263,7 +349,7 @@ char Task::priority_char() const
 
 void Task::set_timeblock_uuid(const char *tb_uuid)
 {
-    std::strncpy(timeblock_uuid, tb_uuid, UUID_LEN);
+    std::strncpy(timeblock_uuid.value, tb_uuid, UUID_LEN);
 }
 
 /* ------------------------ Get the urgency of a task ----------------------- */
@@ -292,23 +378,32 @@ inline float status_weight(TaskStatus s)
  */
 inline float compute_deadline_pressure(time_t now, time_t due)
 {
-    const float K = 70.0f;
-    const float epsilon = 1.0f / 60.0f; // one minute
+    /**
+     * Pressure function: pressure = exp(-T, t)
+     * T = time until deadline in hours
+     * t = time constant (half life of pressure in hours)
+     */
+    const float t = 48.0f; // Half life of 48 hours; TODO: make this user-configurable
+    float T = difftime(due, now) / 3600.0f;
 
-    std::time_t seconds_left = difftime(due, now);
-    std::time_t hours_left = seconds_left / 3600.0;
+    // Linear scaling for overdue tasks to avoid very large pressures
+    if (T < 0)
+    {
+        return std::max(std::abs(T), 1.0f);
+    }
 
-    if (hours_left <= 0)
-        return 100.0f; // massively urgent if overdue
-
-    return K / std::max(static_cast<float>(hours_left), epsilon);
+    return std::exp(-T / t);
 }
 
 float Task::get_urgency() const
 {
     // Constants
-    const float C = 0.8f; // Undated pressure constant
+    const float C = g_score_weights.undated_pressure_constant; // Undated pressure constant
+    const float w_p = g_score_weights.priority_weight;         // Priority weight
+    const float w_u = g_score_weights.due_date_weight;         // Urgency/deadline pressure weight
+    const float w_e = g_score_weights.scope_weight;            // Effort/scope weight
 
+    // Execptions
     if (priority == Priority::NONE)
     {
         return 0.0f;
@@ -318,12 +413,30 @@ float Task::get_urgency() const
         return 0.0f;
     }
 
-    float priority_value = static_cast<float>(priority); // Get enumerator value
-
-    if (!due_date)
+    // Urgency is -1 if blocked by an incomplete prerequisite
+    for (const Task *prereq : prerequisites)
     {
-        return priority_value * C * status_weight(status);
+        if (prereq->status != TaskStatus::COMPLETE)
+        {
+            return -1.0f;
+        }
     }
 
-    return priority_value * compute_deadline_pressure(time(nullptr), due_date) * status_weight(status);
+    // --- Calculate urgency ---
+    //! Should have multiple types of sorting factors, for now we do hardest first
+
+    /** Eat the frog
+      score_frog = w_u * U
+      + w_p * P_norm
+      + w_e * E_norm
+     */
+
+    // Normalize priority and effort to [0, 1]
+    double P_norm = (static_cast<int>(priority) - static_cast<int>(Priority::VERY_LOW)) / static_cast<int>(Priority::VERY_HIGH);
+    double E_norm = (static_cast<int>(scope) - static_cast<int>(Scope::XS)) / static_cast<int>(Scope::XL);
+
+    // Compute deadline pressure, from [0, 1] or [1, inf) if overdue, or constant C if undated
+    double pressure = due_date ? compute_deadline_pressure(time(nullptr), due_date) : C;
+
+    return w_u * pressure + w_p * P_norm + w_e * E_norm;
 }

@@ -2,14 +2,36 @@
 
 #include <sqlite3.h>
 #include <vector>
+#include <memory>
 
-#include "defs.h"
-
+#include "uuid.h"
 #include "timeblock.h"
 #include "task.h"
 
+#define DATABASE_PATH "database.db"
+
 // Utility: Generate UUID string (defined in database.cpp)
 void generate_uuid(char *uuid_buf);
+
+// --- Hash function for UUID to allow use in unordered_map ---
+namespace std
+{
+    template <>
+    struct hash<UUID>
+    {
+        std::size_t operator()(const UUID &u) const noexcept
+        {
+            // FNV-1a hash (fast and good for fixed strings)
+            std::size_t h = 1469598103934665603ull;
+            for (int i = 0; i < UUID_LEN - 1 && u.value[i]; ++i)
+            {
+                h ^= static_cast<unsigned char>(u.value[i]);
+                h *= 1099511628211ull;
+            }
+            return h;
+        }
+    };
+}
 
 class Database
 {
@@ -29,7 +51,7 @@ public:
 
     // ----------------------------------------- Task Data --------------------------------------------
     void insert_task(const Task &task);
-    void load_tasks(Timeblock *timeblock);
+    void load_tasks(TaskHash &tasks);
     void update_task(const Task &task);
     void delete_task(const char *uuid);
 
@@ -42,4 +64,10 @@ public:
     void load_habit_completion_preview(Task &task, const char *current_date_iso8601);
     // Load all habit entry dates for a task (ISO date strings -> time_t)
     void get_habit_entries(const char *task_uuid, std::vector<time_t> &outDates);
+
+    // -------------------------------------- Entry Link Data ----------------------------------------
+    void add_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void remove_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void remove_all_links_for_task(const char *task_uuid);
+    void get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids);
 };

@@ -13,7 +13,7 @@
 Timeblock::Timeblock(const char *name_, const char *desc_, uint8_t day_flags,
                      time_t duration, time_t start_or_day_start)
 {
-    generate_uuid(uuid);
+    generate_uuid(uuid.value);
     name = strdup(name_);
     desc = strdup(desc_);
     day_frequency = GoalSpec::day_frequency(day_flags);
@@ -29,8 +29,6 @@ Timeblock::Timeblock(const char *name_, const char *desc_, uint8_t day_flags,
         day_start = start_or_day_start; // Weekly
         start = 0;
     }
-
-    tasks = {}; // Empty vector
 }
 
 // Check if a timeblock is currently active
@@ -73,4 +71,26 @@ float Timeblock::status_weight(TimeblockStatus s) const
         return 0.0f;
     }
     return 0.0f;
+}
+
+/* -------------------------------------------------------------------------- */
+/*                                    Debug                                   */
+/* -------------------------------------------------------------------------- */
+
+void Timeblock::print() const
+{
+    const char *TAG = "Timeblock::print";
+    LOGI(TAG, "Timeblock <%s>: name=\"%s\", desc=\"%s\", day_freq=%u, duration=%ld, start=%ld, day_start=%ld, status=%d, completed_datetime=%ld\n",
+           uuid.value, name, desc, day_frequency.data, duration, start, day_start, static_cast<int>(status), completed_datetime);
+    LOGI(TAG, "  Tasks:\n");
+    for (const auto *task : tasks)
+    {
+        if (!task)
+        {
+            LOGI(TAG, "    (null task pointer)\n");
+            continue;
+        }
+        LOGI(TAG, "    Task <%s>: name=\"%s\", desc=\"%s\", priority=%d, due_date=%ld, status=%d\n",
+               task->uuid.value, task->name, task->desc, static_cast<int>(task->priority), task->due_date, static_cast<int>(task->status));
+    }
 }

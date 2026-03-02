@@ -65,18 +65,22 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
 
     // --- Left side scene manager ---
     leftStack = new QStackedWidget(this);
-    scheduleView = new DayScheduleView(this);
-    newEntryView = new NewEntryView(this);
-    newTimeblockView = new NewTimeblockView(this);
-    entryDetailsView = new EntryDetailsView(this);
+    overviewView = new OverviewView(leftStack, repo);
+    scheduleView = new DayScheduleView(leftStack);
+    newEntryView = new NewEntryView(leftStack);
+    newTimeblockView = new NewTimeblockView(leftStack);
+    entryDetailsView = new EntryDetailsView(leftStack);
+    settingsView = new SettingsView(leftStack);
 
     // Add schedule + detail/edit views to left stack
-    leftStack->addWidget(scheduleView);     // index 0
-    leftStack->addWidget(entryDetailsView); // index 1
-    leftStack->addWidget(newEntryView);     // index 2
-    leftStack->addWidget(newTimeblockView); // index 3
+    leftStack->addWidget(overviewView);     // index 0
+    leftStack->addWidget(scheduleView);     // index 1
+    leftStack->addWidget(entryDetailsView); // index 2
+    leftStack->addWidget(newEntryView);     // index 3
+    leftStack->addWidget(newTimeblockView); // index 4
+    leftStack->addWidget(settingsView);     // index 5
 
-    leftStack->setCurrentWidget(scheduleView);
+    leftStack->setCurrentWidget(overviewView);
 
     // --- Right side scene manager ---
     rightStack = new QStackedWidget(this);
@@ -99,13 +103,15 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     central->setLayout(root);
 
     // --- Edge icons ---
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "overview.png"), Scene::Overview);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "schedule.png"), Scene::DaySchedule);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_timeblock.png"), Scene::NewTimeblock);
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "new_entry.png"), Scene::NewEntry);
+    leftEdgeLayout->addStretch();
+    addLeftEdgeButton(QIcon(ASSET_FOLDER + "settings.png"), Scene::Settings);
 
     addRightEdgeButton(QIcon(ASSET_FOLDER + "todo_list.png"), Scene::TodoList);
     // Force everything to the top
-    leftEdgeLayout->addStretch();
     rightEdgeLayout->addStretch();
 
     // Update the views with the current model
@@ -116,21 +122,24 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     /* -------------------------------------------------------------------------- */
 
     // --- Todo list task selection handling ---
-    connect(todoListView, &TodoListView::taskSelected, this, [this](const Task *t)
-            {
-        // When a task is selected in the todo list, show its details on the right panel
-        Q_ASSERT(t);    // Enforce non-null task pointer
-        QVariant v = QVariant::fromValue(t);
-        switchLeftPanel(Scene::EntryDetails, v); });
+    connect(todoListView, &TodoListView::taskSelected, this, &MainWindow::onTaskSelected);
     connect(todoListView, &TodoListView::taskDeselected, this, [this]()
-            {
-        // When no task is selected, switch back to schedule view
-        switchLeftPanel(Scene::DaySchedule); });
+            { onTaskSelected(nullptr); });
 
     // --- New entry handling ---
     connect(newEntryView, &NewEntryView::taskCreated, this, &MainWindow::onTaskCreated);
     connect(newEntryView, &NewEntryView::taskEdited, this, &MainWindow::onTaskEdited);
     connect(newTimeblockView, &NewTimeblockView::timeblockCreated, this, &MainWindow::onTimeblockCreated);
+
+    // Prerequisite link flow: start/stop link-selection
+    connect(newEntryView, &NewEntryView::requestStartPrereqLink, this, [this]()
+            {
+        // Switch right panel into link-selection mode (show todo list but mark mode)
+        switchRightPanel(Scene::NewEntryLink); });
+    connect(newEntryView, &NewEntryView::requestEndPrereqLink, this, [this]()
+            {
+        // Exit link-selection mode and show normal todo list
+        switchRightPanel(Scene::TodoList); });
 
     connect(repo, &CalendarRepository::modelChanged, this, &MainWindow::modelChanged);
 
@@ -278,6 +287,14 @@ void MainWindow::switchRightPanel(Scene scene, QVariant data)
     case Scene::TodoList:
         rightStack->setCurrentWidget(todoListView);
         currentRightScene = Scene::TodoList;
+        // Update the todo list
+        modelChanged();
+        break;
+    case Scene::NewEntryLink:
+        // Show the todo list but mark the right scene as NewEntryLink so
+        // selection events are routed to NewEntryView for linking.
+        rightStack->setCurrentWidget(todoListView);
+        currentRightScene = Scene::NewEntryLink;
         break;
     }
 
@@ -288,8 +305,26 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
 {
     const char *TAG = "MainWindow::switchLeftPanel";
 
+    // If we are currently in NewEntryLink mode on the right and the user is
+    // switching the left panel away from NewEntry, cancel the link operation
+    // by notifying NewEntryView with nullptr (acts like Cancel) before
+    // changing scenes.
+    if (currentRightScene == Scene::NewEntryLink && scene != Scene::NewEntry)
+    {
+        if (newEntryView)
+            newEntryView->previewPrerequisite(nullptr);
+        // Also exit link-selection mode on the right
+        switchRightPanel(Scene::TodoList);
+    }
+
     switch (scene)
     {
+    case Scene::Overview:
+        leftStack->setCurrentWidget(overviewView);
+        overviewView->updateOverview(); // Refresh overview data
+        currentLeftScene = Scene::Overview;
+        break;
+
     case Scene::DaySchedule:
         leftStack->setCurrentWidget(scheduleView);
         currentLeftScene = Scene::DaySchedule;
@@ -347,6 +382,10 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
         currentLeftScene = Scene::EntryDetails;
         break;
 
+    case Scene::Settings:
+        leftStack->setCurrentWidget(settingsView);
+        currentLeftScene = Scene::Settings;
+        break;
     default:
         leftStack->setCurrentWidget(scheduleView);
         currentLeftScene = Scene::DaySchedule;
@@ -360,6 +399,30 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
 /*                                   Runtime                                  */
 /* -------------------------------------------------------------------------- */
 
+void MainWindow::onTaskSelected(const Task *task)
+{
+    const char *TAG = "MainWindow::onTaskSelected";
+
+    if (!task)
+    {
+        // When no task is selected, switch back to schedule view
+        switchLeftPanel(Scene::DaySchedule);
+        return;
+    }
+
+    // If we're in NewEntryLink mode on the right side and the left panel
+    // is showing NewEntryView, route the selection to NewEntryView for
+    // prerequisite preview instead of opening entry details.
+    if (currentRightScene == Scene::NewEntryLink && currentLeftScene == Scene::NewEntry)
+    {
+        newEntryView->previewPrerequisite(task);
+        return;
+    }
+
+    QVariant v = QVariant::fromValue(task);
+    switchLeftPanel(Scene::EntryDetails, v);
+}
+
 void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
 {
     const char *TAG = "MainWindow::onTaskCreated";
@@ -367,6 +430,26 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
     LOGI(TAG, "Task <%s> created for timeblock index %d", task->name, timeblockIndex);
 
     repo->addTask(*task, timeblockIndex);
+
+    // Find if a prerequisite was selected in NewEntryView and create the entry link
+    std::string prereq = newEntryView->takePrereqUuid();
+    if (!prereq.empty())
+    {
+        // Parent relies on child, so prereq is the child and the new task is the parent in the dependency link
+        Task *child = repo->findTaskByUuid(prereq.c_str());
+        Task *parent = repo->findTaskByUuid(task->uuid);
+        if (parent && child)
+        {
+            repo->addEntryLink(parent, child);
+        }
+        else
+        {
+            LOGW(TAG, "Could not create entry link: parent or child task not found in repo");
+        }
+
+        // Refresh the todo list to show the new link
+        modelChanged();
+    }
 
     // We copied the Task into the Timeblock, so free the heap allocation
     delete task;
@@ -377,6 +460,31 @@ void MainWindow::onTaskEdited(Task *task)
     const char *TAG = "MainWindow::onTaskEdited";
 
     LOGI(TAG, "Task <%s> edited", task->name);
+
+    // Update prerequisite links by rebuilding them
+
+    // Save new links
+    std::vector<Task *> newPrereqs;
+    std::string prereqUuid = newEntryView->takePrereqUuid();
+    if (!prereqUuid.empty())
+    {
+        Task *prereqTask = repo->findTaskByUuid(prereqUuid.c_str());
+        if (prereqTask)
+        {
+            newPrereqs.push_back(prereqTask);
+        }
+        else
+        {
+            LOGW(TAG, "Could not find prerequisite task with UUID %s", prereqUuid.c_str());
+        }
+    }
+
+    // Remove existing links
+    repo->removeAllLinksForTask(task);
+    for (Task *prereq : newPrereqs)
+    {
+        repo->addEntryLink(task, prereq);
+    }
 
     if (!repo->updateTask(*task))
     {
@@ -410,4 +518,6 @@ void MainWindow::modelChanged()
     todoListView->updateTasklists(repo->timeblocks());
     // Also update NewEntryView's timeblock list
     newEntryView->populateTimeblocks(repo->timeblocks());
+    // Update overview data
+    overviewView->updateOverview();
 }

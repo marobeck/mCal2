@@ -1,4 +1,5 @@
 #include "newentryview.h"
+#include "uuid.h"
 #include "log.h"
 
 #include <QVBoxLayout>
@@ -51,6 +52,9 @@ NewEntryView::NewEntryView(QWidget *parent)
     connect(m_typeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, &NewEntryView::onTypeChanged);
     form->addRow("Type:", m_typeCombo);
 
+    // --- Urgency and importance dropdowns ---
+    QHBoxLayout *urgRow = new QHBoxLayout;
+
     // Priority dropdown
     m_priorityCombo = new QComboBox(this);
     m_priorityCombo->addItem("Very Low", static_cast<int>(Priority::VERY_LOW));
@@ -59,7 +63,27 @@ NewEntryView::NewEntryView(QWidget *parent)
     m_priorityCombo->addItem("High", static_cast<int>(Priority::HIGH));
     m_priorityCombo->addItem("Very High", static_cast<int>(Priority::VERY_HIGH));
     m_priorityCombo->setCurrentIndex(2); // Default to Medium
-    form->addRow("Priority:", m_priorityCombo);
+    // Label
+    QLabel *priorityLabel = new QLabel("Priority:");
+    priorityLabel->setToolTip("Estimate of how important this task is (Very Low = not important at all, Very High = extremely important)");
+    urgRow->addWidget(priorityLabel, 0);
+    urgRow->addWidget(m_priorityCombo, 1);
+
+    // Scope dropdown
+    m_scopeCombo = new QComboBox(this);
+    m_scopeCombo->addItem("XS", static_cast<int>(Scope::XS));
+    m_scopeCombo->addItem("S", static_cast<int>(Scope::S));
+    m_scopeCombo->addItem("M", static_cast<int>(Scope::M));
+    m_scopeCombo->addItem("L", static_cast<int>(Scope::L));
+    m_scopeCombo->addItem("XL", static_cast<int>(Scope::XL));
+    m_scopeCombo->setCurrentIndex(2); // Default to M
+    // Label
+    QLabel *scopeLabel = new QLabel("Scope:");
+    scopeLabel->setToolTip("Estimate of how much effort/time would be required to get this task done (XS = very little effort, XL = a lot of effort)");
+    urgRow->addWidget(scopeLabel, 0);
+    urgRow->addWidget(m_scopeCombo, 1);
+
+    form->addRow(urgRow);
 
     // Completion parameters group - contains due date (for Task), frequency, or weekday controls
     QGroupBox *completionBox = new QGroupBox("Completion Parameters", this);
@@ -104,6 +128,34 @@ NewEntryView::NewEntryView(QWidget *parent)
     }
     completionLayout->addWidget(m_weekdayWidget);
 
+    // --- Prerequisites box (only for tasks) ---
+    m_prereqBox = new QWidget(this);
+    QHBoxLayout *prereqLayout = new QHBoxLayout(m_prereqBox);
+    prereqLayout->setContentsMargins(0, 0, 0, 0);
+    QLabel *prereqLabel = new QLabel("Prerequisites:", m_prereqBox);
+    m_prereqPlusBtn = new QPushButton("+", m_prereqBox);
+    m_prereqOkBtn = new QPushButton("OK", m_prereqBox);
+    m_prereqCancelBtn = new QPushButton("Cancel", m_prereqBox);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_prereqPreviewArea = new QWidget(m_prereqBox);
+    QHBoxLayout *previewLayout = new QHBoxLayout(m_prereqPreviewArea);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    m_prereqPreviewArea->setVisible(false);
+
+    prereqLayout->addWidget(prereqLabel, 1);
+    prereqLayout->addWidget(m_prereqPreviewArea, 2);
+    prereqLayout->addWidget(m_prereqPlusBtn, 0);
+    prereqLayout->addWidget(m_prereqOkBtn, 0);
+    prereqLayout->addWidget(m_prereqCancelBtn, 0);
+
+    completionLayout->addWidget(m_prereqBox);
+
+    // Connect prerequisite buttons
+    connect(m_prereqPlusBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqPlusClicked);
+    connect(m_prereqOkBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqOkClicked);
+    connect(m_prereqCancelBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqCancelClicked);
+
     form->addRow(completionBox);
 
     layout->addLayout(form);
@@ -139,6 +191,84 @@ void NewEntryView::clearFields()
     m_dueEdit->setDateTime(QDateTime::currentDateTime());
     m_undatedCheck->setChecked(false);
     m_timeblockCombo->setEnabled(true);
+}
+
+void NewEntryView::onPrereqPlusClicked()
+{
+    // Enter link-selection mode: show OK/Cancel, hide plus, notify MainWindow
+    m_prereqPlusBtn->setVisible(false);
+    m_prereqOkBtn->setVisible(true);
+    m_prereqCancelBtn->setVisible(true);
+    m_prereqPreviewArea->setVisible(true);
+    m_linkModeActive = true;
+    m_prereqUuid.clear();
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    emit requestStartPrereqLink();
+}
+
+void NewEntryView::onPrereqOkClicked()
+{
+    // Confirm selection and leave link mode
+    m_prereqPlusBtn->setVisible(true);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_linkModeActive = false;
+    emit requestEndPrereqLink();
+}
+
+void NewEntryView::onPrereqCancelClicked()
+{
+    // Cancel selection and clear preview
+    m_prereqPlusBtn->setVisible(true);
+    m_prereqOkBtn->setVisible(false);
+    m_prereqCancelBtn->setVisible(false);
+    m_linkModeActive = false;
+    m_prereqUuid.clear();
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    m_prereqPreviewArea->setVisible(false);
+    emit requestEndPrereqLink();
+}
+
+void NewEntryView::previewPrerequisite(const Task *task)
+{
+    // If nullptr -> cancel
+    if (!task)
+    {
+        // act like cancel
+        onPrereqCancelClicked();
+        return;
+    }
+
+    // Show preview widget inside preview area
+    if (m_prereqPreviewWidget)
+    {
+        delete m_prereqPreviewWidget;
+        m_prereqPreviewWidget = nullptr;
+    }
+    m_prereqPreviewWidget = new TaskItemWidget(task); // Use preview constructor
+    QHBoxLayout *layout = qobject_cast<QHBoxLayout *>(m_prereqPreviewArea->layout());
+    if (!layout)
+    {
+        layout = new QHBoxLayout(m_prereqPreviewArea);
+        layout->setContentsMargins(0, 0, 0, 0);
+    }
+    layout->addWidget(m_prereqPreviewWidget);
+    m_prereqPreviewArea->setVisible(true);
+    // Store uuid for later retrieval
+    m_prereqUuid = task->uuid.value;
+}
+
+std::string NewEntryView::takePrereqUuid()
+{
+    return m_prereqUuid;
 }
 
 void NewEntryView::loadTaskForEditing(Task *task)
@@ -192,6 +322,28 @@ void NewEntryView::loadTaskForEditing(Task *task)
     }
     m_priorityCombo->setCurrentIndex(priorityIndex);
 
+    // Scope
+    int scopeIndex = 2; // Default to M
+    switch (task->scope)
+    {
+    case Scope::XS:
+        scopeIndex = 0;
+        break;
+    case Scope::S:
+        scopeIndex = 1;
+        break;
+    case Scope::M:
+        scopeIndex = 2;
+        break;
+    case Scope::L:
+        scopeIndex = 3;
+        break;
+    case Scope::XL:
+        scopeIndex = 4;
+        break;
+    }
+    m_scopeCombo->setCurrentIndex(scopeIndex);
+
     // Type and related fields
     if (task->status == TaskStatus::HABIT)
     {
@@ -226,6 +378,15 @@ void NewEntryView::loadTaskForEditing(Task *task)
             m_dueEdit->setDateTime(dueDate);
             m_undatedCheck->setChecked(false);
         }
+    }
+
+    // Prerequisite preview
+    LOGI(TAG, "Task has %zu prerequisites", task->prerequisites.size());
+    if (!task->prerequisites.empty())
+    { // For simplicity, only preview the first prerequisite if multiple are present
+        const char *prereqName = task->prerequisites[0]->name ? task->prerequisites[0]->name : "(null)";
+        LOGI(TAG, "Previewing prerequisite task: %s", prereqName);
+        previewPrerequisite(task->prerequisites[0]);
     }
 }
 
@@ -272,7 +433,8 @@ void NewEntryView::onCreateClicked()
     // Set UUID
     if (m_editMode)
     {
-        memcpy(t->uuid, m_editingTask->uuid, UUID_LEN);
+        memcpy(t->uuid.value, m_editingTask->uuid.value, UUID_LEN);
+        memcpy(t->timeblock_uuid.value, m_editingTask->timeblock_uuid.value, UUID_LEN);
     }
 
     // Set name and description
@@ -288,6 +450,10 @@ void NewEntryView::onCreateClicked()
     // Set priority
     int rawPriority = m_priorityCombo->currentData().toInt();
     t->priority = static_cast<Priority>(rawPriority);
+
+    // Set scope
+    int rawScope = m_scopeCombo->currentData().toInt();
+    t->scope = static_cast<Scope>(rawScope);
 
     // Set due date or goal spec based on type
     int typeIndex = m_typeCombo->currentIndex();
