@@ -3,15 +3,15 @@
  */
 #pragma once
 
+#include "uuid.h"
 #include <sqlite3.h>
 #include <time.h>
-
-#include "defs.h"
+#include <string>
 
 typedef struct
 {
-    char task_uuid[UUID_LEN];
-    char date[DATE_LEN]; // YYYY-MM-DD
+    UUID task_uuid;
+    char date[11]; // YYYY-MM-DD
 } habit_t;
 
 // ------------------------------------------ DATABASE --------------------------------------------

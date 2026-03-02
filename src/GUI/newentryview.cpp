@@ -1,4 +1,5 @@
 #include "newentryview.h"
+#include "uuid.h"
 #include "log.h"
 
 #include <QVBoxLayout>
@@ -252,7 +253,7 @@ void NewEntryView::previewPrerequisite(const Task *task)
         delete m_prereqPreviewWidget;
         m_prereqPreviewWidget = nullptr;
     }
-    m_prereqPreviewWidget = new TaskItemWidget(*task, nullptr, m_prereqPreviewArea, TaskItemWidget::Mode::PREVIEW);
+    m_prereqPreviewWidget = new TaskItemWidget(task); // Use preview constructor
     QHBoxLayout *layout = qobject_cast<QHBoxLayout *>(m_prereqPreviewArea->layout());
     if (!layout)
     {
@@ -262,7 +263,7 @@ void NewEntryView::previewPrerequisite(const Task *task)
     layout->addWidget(m_prereqPreviewWidget);
     m_prereqPreviewArea->setVisible(true);
     // Store uuid for later retrieval
-    m_prereqUuid = task->uuid;
+    m_prereqUuid = task->uuid.value;
 }
 
 std::string NewEntryView::takePrereqUuid()
@@ -432,8 +433,8 @@ void NewEntryView::onCreateClicked()
     // Set UUID
     if (m_editMode)
     {
-        memcpy(t->uuid, m_editingTask->uuid, UUID_LEN);
-        memcpy(t->timeblock_uuid, m_editingTask->timeblock_uuid, UUID_LEN);
+        memcpy(t->uuid.value, m_editingTask->uuid.value, UUID_LEN);
+        memcpy(t->timeblock_uuid.value, m_editingTask->timeblock_uuid.value, UUID_LEN);
     }
 
     // Set name and description

@@ -1,7 +1,9 @@
 #include <string.h>
 #include <stdlib.h>
+#include <unordered_map>
 
 #include "database.h"
+#include "uuid.h"
 #include "log.h"
 
 #include <uuid/uuid.h>
@@ -193,8 +195,12 @@ void Database::load_timeblocks(std::vector<Timeblock> &timeblocks)
 
     while (sqlite3_step(stmt) == SQLITE_ROW)
     {
-        Timeblock tb;
-        strncpy(tb.uuid, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
+        // Emplace a new Timeblock into the vector and populate it in-place to avoid
+        // making a copy of a stack-allocated object (which could lead to shallow-copy
+        // problems if Timeblock manages dynamic memory).
+        timeblocks.emplace_back();
+        Timeblock &tb = timeblocks.back();
+        strncpy(tb.uuid.value, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
         tb.status = static_cast<TimeblockStatus>(sqlite3_column_int(stmt, 1));
         tb.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
         tb.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
@@ -203,8 +209,6 @@ void Database::load_timeblocks(std::vector<Timeblock> &timeblocks)
         tb.start = sqlite3_column_int64(stmt, 6);
         tb.day_start = sqlite3_column_int64(stmt, 7);
         tb.completed_datetime = sqlite3_column_int64(stmt, 8);
-
-        timeblocks.push_back(tb);
     }
 
     sqlite3_finalize(stmt);
@@ -338,17 +342,19 @@ void Database::insert_task(const Task &task)
     throw sqlite3_errcode(db);
 }
 
-void Database::load_tasks(Timeblock *timeblock)
+/// @brief Load all tasks in database into provided hash map, keyed by UUID for O(1) access. Timeblocks will store pointers to their tasks for organization.
+/// @param tasks Hash map to populate with tasks from database; should be empty when passed in
+void Database::load_tasks(TaskHash &tasks)
 {
     const char *TAG = "DB::load_tasks";
 
-    if (!timeblock)
+    if (!tasks.empty())
     {
-        LOGE(TAG, "Null timeblock provided to load_tasks");
-        throw -1;
+        LOGW(TAG, "Provided task hash map is not empty, clearing before loading tasks from database.");
+        tasks.clear();
     }
 
-    const char *sql = "SELECT * FROM tasks WHERE timeblock_uuid = ?;";
+    const char *sql = "SELECT * FROM tasks;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -357,36 +363,29 @@ void Database::load_tasks(Timeblock *timeblock)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_text(stmt, 1, timeblock->uuid, -1, SQLITE_STATIC);
-
     while (sqlite3_step(stmt) == SQLITE_ROW)
     {
-        Task t;
-        strncpy(t.uuid, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
-        strncpy(t.timeblock_uuid, (const char *)sqlite3_column_text(stmt, 1), UUID_LEN);
-        t.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
-        t.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
-        t.due_date = sqlite3_column_int64(stmt, 4);
-        t.priority = static_cast<Priority>(sqlite3_column_int(stmt, 5));
-        t.scope = static_cast<Scope>(sqlite3_column_int(stmt, 6));
-        t.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 7));
-        t.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 8));
-        t.completed_datetime = sqlite3_column_int64(stmt, 9);
+        // Allocate the Task on the heap and populate it directly so we do not copy
+        // a stack-allocated Task into the map (which could cause shallow-copying of
+        // dynamically allocated members and lead to dangling pointers / double frees).
+        std::unique_ptr<Task> tptr = std::make_unique<Task>();
+        strncpy(tptr->uuid.value, (const char *)sqlite3_column_text(stmt, 0), UUID_LEN);
+        strncpy(tptr->timeblock_uuid.value, (const char *)sqlite3_column_text(stmt, 1), UUID_LEN);
+        tptr->name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        tptr->desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        tptr->due_date = sqlite3_column_int64(stmt, 4);
+        tptr->priority = static_cast<Priority>(sqlite3_column_int(stmt, 5));
+        tptr->scope = static_cast<Scope>(sqlite3_column_int(stmt, 6));
+        tptr->status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 7));
+        tptr->goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 8));
+        tptr->completed_datetime = sqlite3_column_int64(stmt, 9);
 
-        // Sort between archive and active tasks
-        if (t.status == TaskStatus::COMPLETE)
-        {
-            timeblock->append_archived(t);
-        }
-        else
-        {
-            timeblock->append(t);
-        }
+        tasks[tptr->uuid] = std::move(tptr);
     }
 
     sqlite3_finalize(stmt);
 
-    LOGI(TAG, "Loaded %zu tasks for timeblock <%s>", timeblock->tasks.size(), timeblock->name);
+    LOGI(TAG, "Loaded %zu tasks", tasks.size());
     return;
 }
 
