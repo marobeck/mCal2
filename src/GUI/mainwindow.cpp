@@ -321,7 +321,7 @@ void MainWindow::switchLeftPanel(Scene scene, QVariant data)
     {
     case Scene::Overview:
         leftStack->setCurrentWidget(overviewView);
-        overviewView->updateOverview(repo->timeblocks()); // Refresh overview data
+        overviewView->updateOverview(); // Refresh overview data
         currentLeftScene = Scene::Overview;
         break;
 
@@ -519,5 +519,5 @@ void MainWindow::modelChanged()
     // Also update NewEntryView's timeblock list
     newEntryView->populateTimeblocks(repo->timeblocks());
     // Update overview data
-    overviewView->updateOverview(repo->timeblocks());
+    overviewView->updateOverview();
 }
