@@ -3,6 +3,8 @@
 #include "log.h"
 #include "taskitemwidget.h"
 
+#define TASKS_TO_DISPLAY 5
+
 OverviewView::OverviewView(QWidget *parent, CalendarRepository *dataRepo)
     : QWidget(parent), repo(dataRepo)
 {
@@ -38,41 +40,54 @@ OverviewView::OverviewView(QWidget *parent, CalendarRepository *dataRepo)
     m_completedTasksList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     layout->addWidget(m_completedTasksList);
 
-    updateOverview(repo->timeblocks());
+    updateOverview();
 }
 
-void OverviewView::updateOverview(const std::vector<Timeblock> &timeblocks)
+void OverviewView::updateOverview()
 {
     const char *TAG = "OverviewView::updateOverview";
-    LOGI(TAG, "Updating overview with %zu timeblocks.", timeblocks.size());
+    LOGI(TAG, "Updating overview");
 
-    size_t tasksDisplayed = 5; // Max number of tasks to display in overview
+    std::vector<Task *> tasksToDisplay;
+    std::vector<Task *> completedToday;
+    time_t now = std::time(nullptr);
 
-    // Iterate through all timeblocks and tasks to find the most urgent tasks
-    std::vector<const Task *> tasksToDisplay;
-    for (const auto &tb : timeblocks)
+
+    // Iterate through tasks to get the most urgent ones and tasks completed today.
+    for (auto &[uuid, taskPtr] : repo->tasks())
     {
-        // Grab all incomplete tasks
-        for (const auto &task : tb.tasks)
+        // Iterate through all ongoing tasks
+        if (taskPtr->status == TaskStatus::INCOMPLETE || taskPtr->status == TaskStatus::HABIT)
         {
-            tasksToDisplay.push_back(&task);
+            tasksToDisplay.push_back(taskPtr.get());
+        }
+        else if (taskPtr->status == TaskStatus::COMPLETE)
+        {
+            // Check if task was completed today
+            time_t startOfDay = now - (now % 86400); // Get start of current day
+            if (taskPtr->completed_datetime >= startOfDay)
+            {
+                completedToday.push_back(taskPtr.get());
+            }
         }
     }
+
+    // --- Update list of top tasks ---
 
     // Sort tasks by urgency and take the top ones
     std::sort(tasksToDisplay.begin(), tasksToDisplay.end(), [](const Task *a, const Task *b)
               { return a->get_urgency() > b->get_urgency(); });
-    if (tasksToDisplay.size() > tasksDisplayed)
+    if (tasksToDisplay.size() > (int)TASKS_TO_DISPLAY)
     {
-        tasksToDisplay.resize(tasksDisplayed);
+        tasksToDisplay.resize((int)TASKS_TO_DISPLAY);
     }
 
     // Update the list widget with the top tasks
     m_urgentTasksList->clear();
-    for (const auto *task : tasksToDisplay)
+    for (auto *task : tasksToDisplay)
     {
         QListWidgetItem *item = new QListWidgetItem(m_urgentTasksList);
-        TaskItemWidget *widget = new TaskItemWidget(*task, repo, this, TaskItemWidget::Mode::COMPACT);
+        TaskItemWidget *widget = new TaskItemWidget(task, repo, this, TaskItemWidget::Mode::COMPACT);
         item->setSizeHint(widget->sizeHint());
         m_urgentTasksList->addItem(item);
         m_urgentTasksList->setItemWidget(item, widget);
@@ -80,31 +95,13 @@ void OverviewView::updateOverview(const std::vector<Timeblock> &timeblocks)
 
     // --- Update ledger of tasks completed today ---
 
-    std::vector<const Task *> completedToday;
-    time_t now = std::time(nullptr);
-    for (const auto &tb : timeblocks)
-    {
-        for (const auto &task : tb.archived_tasks)
-        {
-            // Check if task was completed today
-            if (task.completed_datetime != 0)
-            {
-                time_t startOfDay = now - (now % 86400); // Get start of current day
-                if (task.completed_datetime >= startOfDay)
-                {
-                    completedToday.push_back(&task);
-                }
-            }
-        }
-    }
-
     if (completedToday.empty())
     {
         m_completedTasksList->clear();
         QListWidgetItem *item = new QListWidgetItem("No tasks completed today.", m_completedTasksList);
         item->setTextAlignment(Qt::AlignVCenter | Qt::AlignHCenter); // Center the text
-        item->setForeground(Qt::darkGray);                               // Set text color to dark red
-        item->setFont(QFont("Helvetica", 18, QFont::Bold)); // Set font to bold
+        item->setForeground(Qt::darkGray);                           // Set text color to dark red
+        item->setFont(QFont("Helvetica", 18, QFont::Bold));          // Set font to bold
         item->setFlags(Qt::NoItemFlags);                             // Make item non-interactive
         item->setSizeHint(QSize(m_completedTasksList->width(), 50)); // Set item height
         m_completedTasksList->addItem(item);
@@ -117,10 +114,10 @@ void OverviewView::updateOverview(const std::vector<Timeblock> &timeblocks)
 
     // Update the completed tasks list widget
     m_completedTasksList->clear();
-    for (const auto *task : completedToday)
+    for (auto *task : completedToday)
     {
         QListWidgetItem *item = new QListWidgetItem(m_completedTasksList);
-        TaskItemWidget *widget = new TaskItemWidget(*task, repo, this, TaskItemWidget::Mode::COMPACT);
+        TaskItemWidget *widget = new TaskItemWidget(task, repo, this, TaskItemWidget::Mode::COMPACT);
         item->setSizeHint(widget->sizeHint());
         m_completedTasksList->addItem(item);
         m_completedTasksList->setItemWidget(item, widget);

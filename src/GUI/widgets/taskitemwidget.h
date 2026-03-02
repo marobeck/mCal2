@@ -16,7 +16,7 @@ class TaskItemWidget : public QWidget
 {
     Q_OBJECT
 private:
-    Task m_task;
+    Task *m_task;
     QString m_fullName;
     QLabel *m_nameLabel = nullptr;
     QCheckBox *m_doneCheck = nullptr;
@@ -33,8 +33,9 @@ public:
     Mode m_mode = Mode::FULL;
 
 public:
-    TaskItemWidget(const Task &t, CalendarRepository *repo = nullptr, QWidget *parent = nullptr, Mode mode = Mode::FULL);
-    const Task &task() const; // Get associated task for reading
+    TaskItemWidget(Task *t, CalendarRepository *repo = nullptr, QWidget *parent = nullptr, Mode mode = Mode::FULL);
+    TaskItemWidget(const Task *t, QWidget *parent = nullptr); // Constructor for strictly preview mode
+    const Task &task() const;                                 // Get associated task for reading
 
 signals:
     void completionToggled(const Task &task, int checkState);

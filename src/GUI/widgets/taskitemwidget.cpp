@@ -17,9 +17,15 @@
 #include "calendarrepository.h"
 #include <ctime>
 
-TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget *parent, Mode mode)
+TaskItemWidget::TaskItemWidget(Task *t, CalendarRepository *repo, QWidget *parent, Mode mode)
     : QWidget(parent), m_task(t), m_repo(repo), m_mode(mode)
 {
+    if (!m_task)
+    {
+        LOGE("TaskItemWidget", "Initialized with null task pointer!");
+        return;
+    }
+
     QVBoxLayout *layout = new QVBoxLayout(this);
     layout->setContentsMargins(8, 8, 8, 8);
 
@@ -29,18 +35,18 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     m_doneCheck = new QCheckBox(this);
     bool completed = false;
     // If it's a task (not habit), set tristate based on status
-    if (m_task.status != TaskStatus::HABIT)
+    if (m_task->status != TaskStatus::HABIT)
     {
         m_doneCheck->setTristate(true);
-        if (m_task.status == TaskStatus::INCOMPLETE)
+        if (m_task->status == TaskStatus::INCOMPLETE)
         {
             m_doneCheck->setCheckState(Qt::Unchecked);
         }
-        else if (m_task.status == TaskStatus::IN_PROGRESS)
+        else if (m_task->status == TaskStatus::IN_PROGRESS)
         {
             m_doneCheck->setCheckState(Qt::PartiallyChecked);
         }
-        else if (m_task.status == TaskStatus::COMPLETE)
+        else if (m_task->status == TaskStatus::COMPLETE)
         {
             m_doneCheck->setCheckState(Qt::Checked);
             completed = true;
@@ -49,14 +55,17 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     else
     {
         // For habits, just use binary checked/unchecked
-        completed = (m_task.completed_days[0] == TaskStatus::COMPLETE);
+        completed = (m_task->completed_days[0] == TaskStatus::COMPLETE);
         m_doneCheck->setCheckState(completed ? Qt::Checked : Qt::Unchecked);
     }
 
     // Use stateChanged(int) so we can handle tristate for tasks and binary for habits
-    connect(m_doneCheck, &QCheckBox::stateChanged, this, &TaskItemWidget::onCompletionChanged);
+    if (mode != Mode::PREVIEW)
+    {
+        connect(m_doneCheck, &QCheckBox::stateChanged, this, &TaskItemWidget::onCompletionChanged);
+    }
 
-    m_fullName = m_task.name ? QString::fromUtf8(m_task.name) : QString("(untitled)");
+    m_fullName = m_task->name ? QString::fromUtf8(m_task->name) : QString("(untitled)");
     m_nameLabel = new QLabel(m_fullName, this);
     m_nameLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     m_nameLabel->setToolTip(m_fullName);
@@ -72,7 +81,7 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     if (mode == Mode::COMPACT || mode == Mode::PREVIEW)
     {
         // Display priority in a single character for compact mode
-        char priorityChar = t.priority_char();
+        char priorityChar = m_task->priority_char();
         if (priorityChar != ' ')
         {
             m_priorityLabel = new QLabel(QString(priorityChar), this);
@@ -84,7 +93,7 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
             topRow->addWidget(m_priorityLabel, 0, Qt::AlignRight);
         }
     }
-    if (mode == Mode::PREVIEW || t.get_urgency() < 0)
+    if (mode == Mode::PREVIEW || m_task->get_urgency() < 0)
     {
         // In preview mode, we want to disable interaction and just show a static snapshot of the task
         m_doneCheck->setEnabled(false);
@@ -104,90 +113,105 @@ TaskItemWidget::TaskItemWidget(const Task &t, CalendarRepository *repo, QWidget 
     }
 
     // --- Due date *or* habit info ---
-    if (t.status == TaskStatus::HABIT)
+    if (m_task->status == TaskStatus::HABIT)
     {
         HabitBarWidget *habitInfo = new HabitBarWidget(this);
-        habitInfo->setValues(t.completed_days);
+        habitInfo->setValues(m_task->completed_days);
         layout->addWidget(habitInfo);
     }
     else
     {
         // Due date
-        QLabel *due = new QLabel(QString::fromStdString("Due: " + t.due_date_string()), this);
+        QLabel *due = new QLabel(QString::fromStdString("Due: " + m_task->due_date_string()), this);
         layout->addWidget(due);
     }
 
     // --- Priority + Scope ---
-    QLabel *urgency = new QLabel("Priority: " + QString::fromStdString(t.priority_string()) + ", Scope: " + QString::fromStdString(t.scope_string()), this);
+    QLabel *urgency = new QLabel("Priority: " + QString::fromStdString(m_task->priority_string()) + ", Scope: " + QString::fromStdString(m_task->scope_string()), this);
     layout->addWidget(urgency);
+}
+
+// Convenience constructor for strictly preview mode (no repo reference, no interaction, only reading from a const Task pointer)
+TaskItemWidget::TaskItemWidget(const Task *t, QWidget *parent)
+    : TaskItemWidget(const_cast<Task *>(t), nullptr, parent, Mode::PREVIEW)
+{
 }
 
 const Task &TaskItemWidget::task() const
 {
-    return m_task;
+    return *m_task;
 }
 
 void TaskItemWidget::onCompletionChanged(int checkState)
 {
+    LOGI("TaskItemWidget::onCompletionChanged", "Task '%s' completion changed: checkState=%d", m_task->name ? m_task->name : "(untitled)", checkState);
+
     // Update visual strikeout: only fully checked items are struck out
     QFont f = m_nameLabel->font();
     f.setStrikeOut(checkState == Qt::Checked);
     m_nameLabel->setFont(f);
 
-    emit completionToggled(m_task, checkState); //! Unused, since TaskItemWidget handles persistance directly
+    emit completionToggled(*m_task, checkState); //! Unused, since TaskItemWidget handles persistance directly
 
     // If we have a repository pointer, handle persistence directly from here
     if (m_repo)
     {
         // For habits, add/remove today's entry asynchronously
-        if (m_task.status == TaskStatus::HABIT)
+        if (m_task->status == TaskStatus::HABIT)
         {
             time_t now = time(nullptr);
+            // capture minimal data (uuid + timestamp) instead of entire Task
+            std::string uuid_copy(m_task->uuid);
             if (checkState == Qt::Checked)
             {
-                Task tcopy = m_task;
-
-                // Note that the habit was completed today
-                tcopy.completed_datetime = now;
-
-                QTimer::singleShot(0, this, [this, tcopy, now]()
-                                   {
+                QTimer::singleShot(0, this, [this, uuid_copy, now]() {
                     if (m_repo)
                     {
-                        m_repo->addHabitEntry(tcopy.uuid, now);
-                        m_repo->updateTask(tcopy);
-                    } });
+                        m_repo->addHabitEntry(uuid_copy.c_str(), now);
+                        // update due date / urgency; repository will mutate the live task
+                        Task *t = m_repo->findTaskByUuid(uuid_copy.c_str());
+                        if (t)
+                            m_repo->updateTask(*t);
+                    }
+                });
             }
             else if (checkState == Qt::Unchecked)
             {
-                Task tcopy = m_task;
-                QTimer::singleShot(0, this, [this, tcopy, now]()
-                                   {
+                QTimer::singleShot(0, this, [this, uuid_copy, now]() {
                     if (m_repo)
-                        m_repo->removeHabitEntry(tcopy.uuid, now); });
+                        m_repo->removeHabitEntry(uuid_copy.c_str(), now);
+                });
             }
             return;
         }
 
         // For non-habits, update task status and persist asynchronously
-        Task new_task = m_task;
+        TaskStatus newStatus = m_task->status;
+        time_t completeTime = 0;
         if (checkState == Qt::Unchecked)
-            new_task.status = TaskStatus::INCOMPLETE;
+            newStatus = TaskStatus::INCOMPLETE;
         else if (checkState == Qt::PartiallyChecked)
-            new_task.status = TaskStatus::IN_PROGRESS;
+            newStatus = TaskStatus::IN_PROGRESS;
         else if (checkState == Qt::Checked)
         {
-            // Note that the entry has been completed today
-            time_t now = time(nullptr);
-            new_task.completed_datetime = now;
-
-            new_task.status = TaskStatus::COMPLETE;
+            newStatus = TaskStatus::COMPLETE;
+            completeTime = time(nullptr);
         }
+        std::string uuid_copy(m_task->uuid);
 
-        QTimer::singleShot(0, this, [this, new_task]()
-                           {
+        QTimer::singleShot(0, this, [this, uuid_copy, newStatus, completeTime]() {
             if (m_repo)
-                m_repo->updateTask(new_task); });
+            {
+                Task *t = m_repo->findTaskByUuid(uuid_copy.c_str());
+                if (t)
+                {
+                    t->status = newStatus;
+                    if (newStatus == TaskStatus::COMPLETE)
+                        t->completed_datetime = completeTime;
+                    m_repo->updateTask(*t);
+                }
+            }
+        });
     }
 }
 

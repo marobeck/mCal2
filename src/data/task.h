@@ -5,7 +5,7 @@
 #include <sqlite3.h>
 #include <vector>
 
-#include "defs.h"
+#include "uuid.h"
 #include "goalspec.h"
 
 struct ScoreWeights
@@ -58,10 +58,11 @@ enum class TaskStatus
 class Task
 {
 public:
+    /* ------------------------------- Data feilds ------------------------------ */
     // --- Location ---
     // Used for database fetching
-    char uuid[UUID_LEN]; // UUID string of entry
-    char timeblock_uuid[UUID_LEN];
+    UUID uuid;           // UUID of entry
+    UUID timeblock_uuid; // UUID of parent timeblock
 
     // --- Task Urgency ---
 
@@ -83,13 +84,24 @@ public:
     TaskStatus completed_days[10];
 
     // --- Descriptive fields ---
-    char *name = NULL;   // Title of entry
-    char *desc = NULL;   // Verbose description of entry
+    char *name = NULL; // Title of entry
+    char *desc = NULL; // Verbose description of entry
 
+    /* -------------------------------- Functions ------------------------------- */
     // --- Constructors ---
 
     Task() = default;
     Task(const char *name_, const char *desc_, Priority priority_ = Priority::NONE, time_t due_date_ = 0, uint8_t frequency_ = 0);
+
+    // custom copy semantics to manage heap-allocated strings
+    Task(const Task &other);
+    Task &operator=(const Task &other);
+
+    // defaulted move operations are safe since we take ownership of pointers
+    Task(Task &&) noexcept = default;
+    Task &operator=(Task &&) noexcept = default;
+
+    ~Task();
 
     // --- Setters ---
 
@@ -101,6 +113,11 @@ public:
      * Get urgency of a task
      */
     float get_urgency() const;
+
+    time_t get_completed_time() const
+    {
+        return completed_datetime;
+    }
 
     /**
      * Provide due date as a string

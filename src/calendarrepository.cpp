@@ -1,4 +1,5 @@
 #include "calendarrepository.h"
+#include "uuid.h"
 #include "log.h"
 
 #include <time.h>
@@ -20,6 +21,20 @@ CalendarRepository::~CalendarRepository()
 }
 
 /* -------------------------------------------------------------------------- */
+/*                                  Accessors                                 */
+/* -------------------------------------------------------------------------- */
+
+const std::vector<Timeblock> &CalendarRepository::timeblocks() const
+{
+    return m_timeblocks;
+}
+
+const TaskHash &CalendarRepository::tasks() const
+{
+    return m_tasks;
+}
+
+/* -------------------------------------------------------------------------- */
 /*                                Load from DB                                */
 /* -------------------------------------------------------------------------- */
 
@@ -31,40 +46,24 @@ void CalendarRepository::loadAll()
     // Clear current in-memory model
     m_timeblocks.clear();
 
-    // Load timeblocks from database
+    // Load timeblocks and task data from database
     m_db.load_timeblocks(m_timeblocks);
+    m_db.load_tasks(m_tasks);
 
-    sortTimeblocks();
-
-    // Load tasks from timeblocks
-    for (auto &tb : m_timeblocks)
+    // Load habit preview for any habit tasks
+    for (auto &[uuid, taskptr] : m_tasks)
     {
-        m_db.load_tasks(&tb);
-
-        // Load habit preview for any habit tasks
-        for (auto &task : tb.tasks)
+        if (taskptr->status == TaskStatus::HABIT)
         {
-            if (task.status == TaskStatus::HABIT)
-            {
-                // Load habit completion preview
-                habitCompletionPreview(task);
-            }
+            // Load habit completion preview
+            habitCompletionPreview(*taskptr);
         }
     }
 
-    // Now that all tasks are loaded, load linked entries for each task
-    // Use that as a factor to sort tasks within each timeblock by urgency
+    // Link tasks to their timeblocks based on timeblock_uuid
     for (auto &tb : m_timeblocks)
     {
-        // Load linked tasks for each task
-        for (auto &task : tb.tasks)
-        {
-            getLinkedEntries(&task);
-        }
-
-        // Sort tasks within this timeblock by descending urgency (highest urgency first)
-        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
-                  { return a.get_urgency() > b.get_urgency(); });
+        tb.tasks = getTasksForTimeblock(tb.uuid);
     }
 }
 
@@ -129,8 +128,33 @@ void CalendarRepository::habitCompletionStats(const char *taskUuid, std::vector<
 /*                              In-memory access                              */
 /* -------------------------------------------------------------------------- */
 
+// Load all timeblocks and tasks from database into memory, linking them together based on timeblock_uuid and sorting them by urgency
+std::vector<Task *> CalendarRepository::getTasksForTimeblock(const UUID &timeblockUuid)
+{
+    std::vector<Task *> result;
+
+    // Find tasks with matching timeblock_uuid and add pointers to them to the result vector
+    for (auto &[uuid, taskPtr] : m_tasks)
+    {
+        if (taskPtr->timeblock_uuid == timeblockUuid)
+            result.push_back(taskPtr.get());
+    }
+
+    // Sort tasks by urgency
+    sortTasks(result);
+
+    return result;
+}
+
+// Sort timeblocks between each other
 void CalendarRepository::sortTimeblocks()
 {
+    // Sort tasks within each timeblock first so that timeblock sorting can use task urgency
+    for (auto &tb : m_timeblocks)
+    {
+        sortTasks(tb.tasks);
+    }
+
     // Sort timeblocks by urgency of their top task
     auto top_task_urgency = [](const Timeblock &tb) -> float
     {
@@ -139,70 +163,45 @@ void CalendarRepository::sortTimeblocks()
 
         // Add bonus for pinned timeblocks, so they always show first but keep order among themselves
         if (tb.status == TimeblockStatus::PINNED)
-            return tb.tasks[0].get_urgency() * tb.status_weight(tb.status) + 1000.0f;
+            return tb.tasks[0]->get_urgency() * tb.status_weight(tb.status) + 1000.0f;
 
-        return tb.tasks[0].get_urgency() * tb.status_weight(tb.status);
+        return tb.tasks[0]->get_urgency() * tb.status_weight(tb.status);
     };
 
     std::sort(m_timeblocks.begin(), m_timeblocks.end(), [&](const Timeblock &a, const Timeblock &b)
               { return top_task_urgency(a) > top_task_urgency(b); });
 }
 
-const std::vector<Timeblock> &CalendarRepository::timeblocks() const
+// Sort tasks within a timeblock by urgency and completion status
+// Completed tasks are always at the bottom, sorted by completion time (most recent first). Incomplete tasks are sorted by urgency.
+void CalendarRepository::sortTasks(std::vector<Task *> &tasks)
 {
-    return m_timeblocks;
-}
+    std::sort(tasks.begin(), tasks.end(),
+              [](Task *a, Task *b)
+              {
+                  const bool aCompleted = (a->status == TaskStatus::COMPLETE);
+                  const bool bCompleted = (b->status == TaskStatus::COMPLETE);
 
-void CalendarRepository::sortTasks()
-{
-    // Sort tasks within each timeblock by urgency
-    for (auto &tb : m_timeblocks)
-    {
-        std::sort(tb.tasks.begin(), tb.tasks.end(), [](const Task &a, const Task &b)
-                  { return a.get_urgency() > b.get_urgency(); });
-    }
+                  if (aCompleted != bCompleted)
+                      return !aCompleted;
+
+                  if (!aCompleted)
+                  {
+                      return a->get_urgency() > b->get_urgency();
+                  }
+
+                  return a->get_completed_time() > b->get_completed_time();
+              });
 }
 
 Task *CalendarRepository::findTaskByUuid(const char *uuid)
 {
-    for (auto &tb : m_timeblocks)
+    auto it = m_tasks.find(uuid);
+    if (it != m_tasks.end())
     {
-        for (auto &task : tb.tasks)
-        {
-            if (std::strncmp(task.uuid, uuid, UUID_LEN) == 0)
-            {
-                return &task;
-            }
-        }
-        for (auto &task : tb.archived_tasks)
-        {
-            if (std::strncmp(task.uuid, uuid, UUID_LEN) == 0)
-            {
-                return &task;
-            }
-        }
+        return it->second.get();
     }
     return nullptr;
-}
-
-/**
- * Finds tasks by list of UUIDs and fills outTasks with pointers to those tasks
- * This is faster as it only iterates through the timeblocks and tasks once, rather than once per UUID
- *! outTasks is cleared at the start of the function and will only contain tasks that were found
- */
-void CalendarRepository::findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks)
-{
-    // TODO: Implement hash map for even faster lookup, current solution is O(n*m)
-
-    outTasks.clear();
-    for (const char *uuid : uuids)
-    {
-        Task *task = findTaskByUuid(uuid);
-        if (task)
-        {
-            outTasks.push_back(task);
-        }
-    }
 }
 
 Timeblock *CalendarRepository::findTimeblockByUuid(const char *uuid)
@@ -238,12 +237,13 @@ bool CalendarRepository::addTask(Task &task, size_t timeblockIndex)
     // Ensure task has an id and timeblock_uuid set
     if (task.uuid[0] == '\0')
     {
-        generate_uuid(task.uuid);
+        generate_uuid(task.uuid.value);
     }
 
     // copy the timeblock's uuid into the task
-    strncpy(task.timeblock_uuid, m_timeblocks[timeblockIndex].uuid, UUID_LEN);
+    strncpy(task.timeblock_uuid.value, m_timeblocks[timeblockIndex].uuid, UUID_LEN);
 
+    // Persist to database
     try
     {
         m_db.insert_task(task);
@@ -254,13 +254,17 @@ bool CalendarRepository::addTask(Task &task, size_t timeblockIndex)
         return false;
     }
 
+    // Insert into in-memory model
+    m_tasks[task.uuid] = std::make_unique<Task>(task);
+
     // Find spot in memory model to insert based on urgency
-    float taskUrgency = task.get_urgency();
+    Task *taskPtr = m_tasks[task.uuid].get(); // Get pointer to the newly added task in the map
+    float taskUrgency = taskPtr->get_urgency();
     for (size_t i = 0; i < m_timeblocks[timeblockIndex].tasks.size(); i++)
     {
-        if (taskUrgency > m_timeblocks[timeblockIndex].tasks[i].get_urgency())
+        if (taskUrgency > m_timeblocks[timeblockIndex].tasks[i]->get_urgency())
         {
-            m_timeblocks[timeblockIndex].tasks.insert(m_timeblocks[timeblockIndex].tasks.begin() + i, task);
+            m_timeblocks[timeblockIndex].tasks.insert(m_timeblocks[timeblockIndex].tasks.begin() + i, taskPtr);
             LOGI(TAG, "Inserted task <%s> at position %zu in timeblock <%s>", task.name, i, m_timeblocks[timeblockIndex].name);
 
             // Notify listeners
@@ -269,7 +273,7 @@ bool CalendarRepository::addTask(Task &task, size_t timeblockIndex)
             return true;
         }
     }
-    m_timeblocks[timeblockIndex].tasks.push_back(task);
+    m_timeblocks[timeblockIndex].tasks.push_back(taskPtr);
     LOGI(TAG, "Appended task <%s> at end of timeblock <%s>", task.name, m_timeblocks[timeblockIndex].name);
 
     // Notify listeners
@@ -283,35 +287,52 @@ bool CalendarRepository::removeTask(const char *taskUuid)
     const char *TAG = "CalendarRepository::removeTask";
     LOGI(TAG, "Removing task with UUID <%s>", taskUuid);
 
-    // Find and remove from in-memory model
-    for (auto &tb : m_timeblocks)
+    // Find task in in-memory model
+    Task *taskToRemove = findTaskByUuid(taskUuid);
+    if (!taskToRemove)
     {
-        auto &tasks = tb.tasks;
-        auto it = std::find_if(tasks.begin(), tasks.end(), [taskUuid](const Task &t)
-                               { return std::strncmp(t.uuid, taskUuid, UUID_LEN) == 0; });
-        if (it != tasks.end())
-        {
-            tasks.erase(it);
-            // Remove from database
-            try
-            {
-                m_db.delete_task(taskUuid);
-            }
-            catch (int err)
-            {
-                LOGE(TAG, "Failed to delete task from database: %d", err);
-                return false;
-            }
-
-            // Notify listeners
-            emit modelChanged();
-
-            return true;
-        }
+        LOGE(TAG, "Task with UUID <%s> not found in memory, cannot remove", taskUuid);
+        return false;
+    }
+    Timeblock *tb = findTimeblockByUuid(taskToRemove->timeblock_uuid);
+    if (!tb)
+    {
+        LOGE(TAG, "Timeblock with UUID <%s> not found in memory, cannot remove task <%s>", taskToRemove->timeblock_uuid.value, taskToRemove->name);
+        return false;
     }
 
-    LOGE(TAG, "Task with UUID <%s> not found", taskUuid);
-    return false;
+    // Remove from database
+    try
+    {
+        m_db.delete_task(taskUuid);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to delete task from database: %d", err);
+        return false;
+    }
+
+    // Remove from in-memory model
+    auto &tasks = tb->tasks;
+    auto it = std::find_if(tasks.begin(), tasks.end(), [taskToRemove](Task *t)
+                           { return t == taskToRemove; });
+    if (it != tasks.end())
+    {
+        tasks.erase(it);
+    }
+    else
+    {
+        LOGW(TAG, "Task <%s> not found in timeblock <%s>", taskToRemove->name, tb->name);
+        return false;
+    }
+
+    // Remove from task map
+    m_tasks.erase(taskUuid);
+
+    // Notify listeners
+    emit modelChanged();
+
+    return true;
 }
 
 bool CalendarRepository::updateTask(const Task &task)
@@ -324,35 +345,9 @@ bool CalendarRepository::updateTask(const Task &task)
                                                   : "UNKNOWN",
          task.get_urgency());
 
-    // Find in-memory model
-    Timeblock *parentTimeblock = nullptr;
-    Task *existingTask = nullptr;
-    size_t taskIdx = 0;
-    for (auto &tb : m_timeblocks)
-    {
-        for (size_t i = 0; i < tb.tasks.size(); i++)
-        {
-            Task &t = tb.tasks[i];
-            if (std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0)
-            {
-                existingTask = &t;
-                parentTimeblock = &tb;
-                taskIdx = i;
-                break;
-            }
-        }
-        for (size_t i = 0; i < tb.archived_tasks.size(); i++)
-        {
-            Task &t = tb.archived_tasks[i];
-            if (std::strncmp(t.uuid, task.uuid, UUID_LEN) == 0)
-            {
-                existingTask = &t;
-                parentTimeblock = &tb;
-                taskIdx = i;
-                break;
-            }
-        }
-    }
+    // Find task in in-memory model
+    Task *existingTask = findTaskByUuid(task.uuid);
+
     if (!existingTask)
     {
         LOGE(TAG, "Task with UUID <%s> not found in memory, no modifications made", task.uuid);
@@ -370,95 +365,10 @@ bool CalendarRepository::updateTask(const Task &task)
         return false;
     }
 
-    // If completed move to archived tasks
-    if (task.status == TaskStatus::COMPLETE)
-    {
-        // Append to front of archived tasks
-        parentTimeblock->archived_tasks.push_back(task);
-        rotate(parentTimeblock->archived_tasks.rbegin(), parentTimeblock->archived_tasks.rbegin() + 1, parentTimeblock->archived_tasks.rend());
-
-        parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
-        LOGI(TAG, "Moved task <%s> to archived tasks in timeblock <%s>", task.name, parentTimeblock->name);
-        emit modelChanged();
-        return true;
-    }
-    // If uncompleted move back to main list
-    if (existingTask->status == TaskStatus::COMPLETE && task.status != TaskStatus::COMPLETE)
-    {
-        // Place task into correct position based on urgency
-        // Adjust location in timeblock based on urgency
-        float taskUrgency = task.get_urgency();
-        if (parentTimeblock->tasks.empty())
-        {
-            parentTimeblock->tasks.push_back(task);
-            LOGI(TAG, "Moved task <%s> to active tasks in timeblock <%s> at position 0 (only task)", task.name, parentTimeblock->name);
-            // Remove from archived tasks
-            parentTimeblock->archived_tasks.erase(parentTimeblock->archived_tasks.begin() + taskIdx);
-            emit modelChanged();
-            return true;
-        }
-        for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
-        {
-            float u = parentTimeblock->tasks[i].get_urgency();
-            if (taskUrgency > u || u < 0.00001f)
-            {
-                // Move task to this position
-                parentTimeblock->tasks.insert(parentTimeblock->tasks.begin() + i, task);
-                LOGI(TAG, "Moved task <%s> (%0.2f) to position %zu in timeblock <%s>", task.name, taskUrgency, i, parentTimeblock->name);
-                break;
-            }
-        }
-
-        // Remove from archived tasks
-        parentTimeblock->archived_tasks.erase(parentTimeblock->archived_tasks.begin() + taskIdx);
-
-        LOGI(TAG, "Restored task <%s> to active tasks in timeblock <%s>", task.name, parentTimeblock->name);
-        emit modelChanged();
-        return true;
-    }
-
-    // Otherwise task was and will remain in active tasks
-    // Update existing task data
+    // Update in-memory model
     *existingTask = task;
 
-    // --- Adjust location in timeblock based on urgency ---
-
-    // Single item list, no move needed
-    if (parentTimeblock->tasks.size() == 1)
-    {
-        LOGI(TAG, "Only one active task in timeblock <%s>, no move needed", parentTimeblock->name);
-        emit modelChanged();
-        return true;
-    }
-
-    float taskUrgency = task.get_urgency();
-    for (size_t i = 0; i < parentTimeblock->tasks.size(); i++)
-    {
-        // Determine if task should be moved ahead of task at index i based on urgency
-        float u_nxt = parentTimeblock->tasks[i + 1].get_urgency();
-        if (taskUrgency > u_nxt || u_nxt < 0.00001f)
-        {
-            // If we are already at this position, no move needed
-            if (i == taskIdx)
-                break;
-            // Move task to this position
-            parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
-            parentTimeblock->tasks.insert(parentTimeblock->tasks.begin() + i, task);
-            LOGI(TAG, "Moved task <%s> (%0.2f) to position %zu in timeblock <%s>", task.name, taskUrgency, i, parentTimeblock->name);
-            break;
-        }
-        // If we reached the end and task is least urgent, move to end
-        if (i == parentTimeblock->tasks.size() - 1)
-        {
-            parentTimeblock->tasks.erase(parentTimeblock->tasks.begin() + taskIdx);
-            parentTimeblock->tasks.push_back(task);
-            LOGI(TAG, "Moved task <%s> (%0.2f) to end of timeblock <%s>", task.name, taskUrgency, parentTimeblock->name);
-            break;
-        }
-    }
-
     // Notify listeners
-    // TODO: Create new signal for just timeblock updates
     emit modelChanged();
 
     return true;
@@ -469,35 +379,24 @@ bool CalendarRepository::moveTask(const char *taskUuid, const char *timeblockUui
     const char *TAG = "CalendarRepository::moveTask";
     LOGI(TAG, "Moving task with UUID <%s> to timeblock UUID <%s>", taskUuid, timeblockUuid);
 
-    // Find task in current timeblock
-    Timeblock *currentTb = nullptr;
-    std::vector<Task>::iterator taskIt; // Task location in currentTb
-    Task movingTask;
-    for (auto &tb : m_timeblocks)
+    // Find task in in-memory model
+    Task *movingTask = findTaskByUuid(taskUuid);
+    if (!movingTask)
     {
-        taskIt = std::find_if(tb.tasks.begin(), tb.tasks.end(), [taskUuid](const Task &t)
-                              { return std::strncmp(t.uuid, taskUuid, UUID_LEN) == 0; });
-        if (taskIt != tb.tasks.end())
-        {
-            movingTask = *taskIt;
-            currentTb = &tb;
-            // tb.tasks.erase(taskIt); // Remove from current timeblock
-            break;
-        }
-    }
-    if (!currentTb)
-    {
-        LOGE(TAG, "Task with UUID <%s> not found", taskUuid);
+        LOGE(TAG, "Task with UUID <%s> not found in memory, cannot move", taskUuid);
         return false;
     }
 
-    // Update task's timeblock_uuid
-    strncpy(movingTask.timeblock_uuid, timeblockUuid, UUID_LEN);
+    // Find current timeblock of the task
+    Timeblock *currentTb = findTimeblockByUuid(movingTask->timeblock_uuid);
 
-    // Move in database
+    // Update task's timeblock_uuid
+    strncpy(movingTask->timeblock_uuid.value, timeblockUuid, UUID_LEN);
+
+    // Move in database by changing the timeblock_uuid field of the task
     try
     {
-        m_db.update_task(movingTask);
+        m_db.update_task(*movingTask);
     }
     catch (int err)
     {
@@ -505,34 +404,48 @@ bool CalendarRepository::moveTask(const char *taskUuid, const char *timeblockUui
         return false;
     }
 
-    // Insert into new timeblock in memory
-    for (auto &tb : m_timeblocks)
+    // Add to new timeblock's task list at correct position based on urgency
+    Timeblock *newTb = findTimeblockByUuid(timeblockUuid);
+    if (newTb)
     {
-        if (std::strncmp(tb.uuid, timeblockUuid, UUID_LEN) == 0)
+        float taskUrgency = movingTask->get_urgency();
+        auto &newTasks = newTb->tasks;
+        size_t insertPos = 0;
+        for (; insertPos < newTasks.size(); ++insertPos)
         {
-            // Insert based on urgency
-            float taskUrgency = movingTask.get_urgency();
-            for (size_t i = 0; i < tb.tasks.size(); i++)
-            {
-                if (taskUrgency > tb.tasks[i].get_urgency())
-                {
-                    tb.tasks.insert(tb.tasks.begin() + i, movingTask);
-                    currentTb->tasks.erase(taskIt); // Remove from old timeblock
-                    LOGI(TAG, "Inserted moved task <%s> at position %zu in timeblock <%s>", movingTask.name, i, tb.name);
-                    emit modelChanged();
-                    return true;
-                }
-            }
-            tb.tasks.push_back(movingTask);
-            currentTb->tasks.erase(taskIt); // Remove from old timeblock
-            LOGI(TAG, "Appended moved task <%s> at end of timeblock <%s>", movingTask.name, tb.name);
-            emit modelChanged();
-            return true;
+            if (taskUrgency > newTasks[insertPos]->get_urgency())
+                break;
         }
+        newTasks.insert(newTasks.begin() + insertPos, movingTask);
+    }
+    else
+    {
+        LOGW(TAG, "New timeblock with UUID <%s> not found", timeblockUuid);
+        return false;
     }
 
-    LOGE(TAG, "Destination timeblock with UUID <%s> not found", timeblockUuid);
-    return false;
+    // Remove from current timeblock's task list
+    if (currentTb)
+    {
+        auto &tasks = currentTb->tasks;
+        // ptr comparison since tasks are stored as pointers in timeblocks
+        auto it = std::find_if(tasks.begin(), tasks.end(), [movingTask](const Task *t)
+                               { return t == movingTask; });
+        if (it != tasks.end())
+        {
+            tasks.erase(it);
+        }
+    }
+    else
+    {
+        LOGW(TAG, "Current timeblock for task <%s> not found; task may be in an inconsistent state", movingTask->name);
+        return false;
+    }
+
+    // Notify listeners of change
+    emit modelChanged();
+
+    return true;
 }
 
 /* --------------------------------- Habits --------------------------------- */
@@ -546,65 +459,29 @@ bool CalendarRepository::addHabitEntry(const char *taskUuid, const char *dateIso
     {
         m_db.add_habit_entry(taskUuid, dateIso8601);
         LOGI(TAG, "Persisted habit entry to database");
-        // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
-        Timeblock *parentTb = nullptr;
-        Task *foundTask = nullptr;
-        size_t taskIdx = 0;
-        for (auto &tb : m_timeblocks)
-        {
-            for (size_t i = 0; i < tb.tasks.size(); ++i)
-            {
-                if (std::strncmp(tb.tasks[i].uuid, taskUuid, UUID_LEN) == 0)
-                {
-                    parentTb = &tb;
-                    foundTask = &tb.tasks[i];
-                    taskIdx = i;
-                    break;
-                }
-            }
-            if (foundTask)
-                break;
-        }
-
-        if (foundTask && parentTb)
-        {
-            // Make a copy, refresh preview for the specific date, and compute new urgency
-            Task updated = *foundTask;
-            updated.update_due_date();
-            const char *today = nullptr;
-            {
-                // Get current date in ISO 8601 format
-                char now_str[11]; // "YYYY-MM-DD" + null terminator
-                time_t now = time(nullptr);
-                struct tm local_tm = *localtime(&now);
-                strftime(now_str, sizeof(now_str), "%Y-%m-%d", &local_tm);
-                today = now_str;
-            }
-            m_db.load_habit_completion_preview(updated, today); // Load updated preview including new entry relative to today
-
-            float newUrgency = updated.get_urgency();
-
-            // Remove original and insert updated at proper sorted position
-            parentTb->tasks.erase(parentTb->tasks.begin() + taskIdx);
-
-            size_t insertPos = 0;
-            for (; insertPos < parentTb->tasks.size(); ++insertPos)
-            {
-                if (newUrgency > parentTb->tasks[insertPos].get_urgency())
-                    break;
-            }
-            parentTb->tasks.insert(parentTb->tasks.begin() + insertPos, updated);
-            LOGI(TAG, "Updated habit task <%s> and moved to position %zu in timeblock <%s>", updated.name, insertPos, parentTb->name);
-        }
-
-        emit modelChanged();
-        return true;
     }
     catch (int err)
     {
         LOGE(TAG, "Failed to persist habit entry: %d", err);
         return false;
     }
+
+    // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
+    Task *habit = findTaskByUuid(taskUuid);
+    if (habit)
+    {
+        habit->update_due_date();
+        m_db.load_habit_completion_preview(*habit, dateIso8601);
+    }
+    else
+    {
+        LOGE(TAG, "Task with UUID <%s> not found in memory, cannot update habit preview", taskUuid);
+        m_db.remove_habit_entry(taskUuid, dateIso8601); // Rollback database change since task doesn't exist in memory
+        return false;
+    }
+
+    emit modelChanged();
+    return true;
 }
 
 bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *dateIso8601)
@@ -615,70 +492,30 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
     try
     {
         m_db.remove_habit_entry(taskUuid, dateIso8601);
-        bool dbExists = m_db.habit_entry_exists(taskUuid, dateIso8601); // Double-check database state
-        if (dbExists)
-        {
-            LOGE(TAG, "Failed to remove habit entry from database; still exists after removal attempt");
-            return false;
-        }
         LOGI(TAG, "Removed habit entry from database");
-        // Update in-memory model similarly to addHabitEntry: refresh preview and reposition by urgency
-        Timeblock *parentTb = nullptr;
-        Task *foundTask = nullptr;
-        size_t taskIdx = 0;
-        for (auto &tb : m_timeblocks)
-        {
-            for (size_t i = 0; i < tb.tasks.size(); ++i)
-            {
-                if (std::strncmp(tb.tasks[i].uuid, taskUuid, UUID_LEN) == 0)
-                {
-                    parentTb = &tb;
-                    foundTask = &tb.tasks[i];
-                    taskIdx = i;
-                    break;
-                }
-            }
-            if (foundTask)
-                break;
-        }
-
-        if (foundTask && parentTb)
-        {
-            Task updated = *foundTask;
-            updated.update_due_date();
-            m_db.load_habit_completion_preview(updated, dateIso8601);
-            // LOGI(TAG, "Refreshed habit completion preview for task <%s> (%s)", updated.name, updated.uuid);
-            // for (size_t i = 0; i < sizeof(updated.completed_days) / sizeof(updated.completed_days[0]); ++i)
-            // {
-            //     LOGI(TAG, "  Day -%zu: %s", i,
-            //          updated.completed_days[i] == TaskStatus::COMPLETE      ? "COMPLETE"
-            //          : updated.completed_days[i] == TaskStatus::IN_PROGRESS ? "IN_PROGRESS"
-            //          : updated.completed_days[i] == TaskStatus::INCOMPLETE  ? "INCOMPLETE"
-            //                                                                 : "UNKNOWN");
-            // }
-
-            float newUrgency = updated.get_urgency();
-
-            parentTb->tasks.erase(parentTb->tasks.begin() + taskIdx);
-
-            size_t insertPos = 0;
-            for (; insertPos < parentTb->tasks.size(); ++insertPos)
-            {
-                if (newUrgency > parentTb->tasks[insertPos].get_urgency())
-                    break;
-            }
-            parentTb->tasks.insert(parentTb->tasks.begin() + insertPos, updated);
-            LOGI(TAG, "Updated habit task <%s> (%0.2f) and moved to position %zu in timeblock <%s>", updated.name, newUrgency, insertPos, parentTb->name);
-        }
-
-        emit modelChanged();
-        return true;
     }
     catch (int err)
     {
         LOGE(TAG, "Failed to remove habit entry: %d", err);
         return false;
     }
+
+    // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
+    Task *habit = findTaskByUuid(taskUuid);
+    if (habit)
+    {
+        habit->update_due_date();
+        m_db.load_habit_completion_preview(*habit, dateIso8601);
+    }
+    else
+    {
+        LOGE(TAG, "Task with UUID <%s> not found in memory, cannot update habit preview", taskUuid);
+        m_db.add_habit_entry(taskUuid, dateIso8601); // Rollback database change since task doesn't exist in memory
+        return false;
+    }
+
+    emit modelChanged();
+    return true;
 }
 
 bool CalendarRepository::habitEntryExists(const char *taskUuid, const char *dateIso8601)
@@ -843,7 +680,14 @@ void CalendarRepository::getLinkedEntries(Task *task)
         return;
     }
 
-    findTasksByList(linkedUuid, task->prerequisites);
+    for (const char *uuid : linkedUuid)
+    {
+        Task *linkedTask = findTaskByUuid(uuid);
+        if (linkedTask)
+        {
+            task->prerequisites.push_back(linkedTask);
+        }
+    }
 
     // Cleanup linkedUuid strings
     for (char *uuid : linkedUuid)
@@ -867,7 +711,7 @@ bool CalendarRepository::addTimeblock(Timeblock &tb)
     // Ensure timeblock has an id
     if (tb.uuid[0] == '\0')
     {
-        generate_uuid(tb.uuid);
+        generate_uuid(tb.uuid.value);
     }
 
     // Append to in-memory model
