@@ -11,11 +11,11 @@
 
 Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_date_, uint8_t frequency_)
 {
-    generate_uuid(uuid);
+    generate_uuid(uuid.value);
     name = strdup(name_);
     desc = strdup(desc_);
 
-    std::memset(timeblock_uuid, 0, sizeof(timeblock_uuid));
+    std::memset(timeblock_uuid.value, 0, sizeof(timeblock_uuid.value));
     std::memset(completed_days, 0, sizeof(completed_days));
 
     due_date = due_date_;
@@ -24,6 +24,53 @@ Task::Task(const char *name_, const char *desc_, Priority priority_, time_t due_
     completed_datetime = 0;
     goal_spec = GoalSpec::from_sql(frequency_);
     LOGI("Task::Constructor", "Created task <%s> with frequency %d", name, frequency_);
+}
+
+// Copy constructor: deep-copy heap strings and other fields
+Task::Task(const Task &other)
+{
+    uuid = other.uuid;
+    timeblock_uuid = other.timeblock_uuid;
+    due_date = other.due_date;
+    priority = other.priority;
+    scope = other.scope;
+    status = other.status;
+    completed_datetime = other.completed_datetime;
+    prerequisites = other.prerequisites;
+    goal_spec = other.goal_spec;
+    std::memcpy(completed_days, other.completed_days, sizeof(completed_days));
+    name = other.name ? strdup(other.name) : nullptr;
+    desc = other.desc ? strdup(other.desc) : nullptr;
+}
+
+// Copy assignment operator
+Task &Task::operator=(const Task &other)
+{
+    if (this != &other)
+    {
+        free(name);
+        free(desc);
+        uuid = other.uuid;
+        timeblock_uuid = other.timeblock_uuid;
+        due_date = other.due_date;
+        priority = other.priority;
+        scope = other.scope;
+        status = other.status;
+        completed_datetime = other.completed_datetime;
+        prerequisites = other.prerequisites;
+        goal_spec = other.goal_spec;
+        std::memcpy(completed_days, other.completed_days, sizeof(completed_days));
+        name = other.name ? strdup(other.name) : nullptr;
+        desc = other.desc ? strdup(other.desc) : nullptr;
+    }
+    return *this;
+}
+
+Task::~Task()
+{
+    free(name);
+    free(desc);
+    // Prerequisites are not owned by Task, so we don't free them either
 }
 
 /* -------------------------------------------------------------------------- */
@@ -69,25 +116,25 @@ void Task::update_due_date()
     switch (wday)
     {
     case 0:
-        day_flag = SUNDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Sunday);
         break;
     case 1:
-        day_flag = MONDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Monday);
         break;
     case 2:
-        day_flag = TUESDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Tuesday);
         break;
     case 3:
-        day_flag = WEDNESDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Wednesday);
         break;
     case 4:
-        day_flag = THURSDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Thursday);
         break;
     case 5:
-        day_flag = FRIDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Friday);
         break;
     case 6:
-        day_flag = SATURDAY_FLAG;
+        day_flag = static_cast<unsigned char>(Weekday::Saturday);
         break;
     }
 
@@ -302,7 +349,7 @@ char Task::priority_char() const
 
 void Task::set_timeblock_uuid(const char *tb_uuid)
 {
-    std::strncpy(timeblock_uuid, tb_uuid, UUID_LEN);
+    std::strncpy(timeblock_uuid.value, tb_uuid, UUID_LEN);
 }
 
 /* ------------------------ Get the urgency of a task ----------------------- */
