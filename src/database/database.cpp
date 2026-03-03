@@ -50,6 +50,10 @@ void generate_uuid(char *uuid_buf)
  *  parent_uuid (PK)    - UUID of parent entry
  *  child_uuid (PK)     - UUID of child entry
  *  link_type           - type of link (dependency, habit triggers)
+ * change_receipts:
+ *  uuid (PK)           - UUID of entry that was changed
+ *  table_name          - name of table that was changed (timeblocks, tasks, habit_entries, entry_links)
+ *  last_modified       - time since epoch of when the change was made
  */
 
 Database::Database()
@@ -65,6 +69,8 @@ Database::Database()
 
     const char *sql[] = {
         "PRAGMA foreign_keys = ON;",
+        // Increment this if we make breaking changes to the schema
+        "PRAGMA schema_version = 2;",   // Version 2: Added sync data
         // Tables
         "CREATE TABLE IF NOT EXISTS timeblocks ( \
             uuid TEXT PRIMARY KEY, \
@@ -79,7 +85,7 @@ Database::Database()
         ); \
         CREATE TABLE IF NOT EXISTS tasks( \
             uuid TEXT PRIMARY KEY, \
-            timeblock_uuid TEXT,  \
+            timeblock_uuid TEXT NOT NULL,  \
             name TEXT NOT NULL, \
             description TEXT, \
             due_date INTEGER, \
@@ -90,17 +96,49 @@ Database::Database()
             completed_datetime INTEGER, \
             FOREIGN KEY(timeblock_uuid) REFERENCES timeblocks(uuid) ON DELETE CASCADE); \
         CREATE TABLE IF NOT EXISTS habit_entries( \
-            task_uuid TEXT, \
-            date TEXT, \
+            task_uuid TEXT NOT NULL, \
+            date TEXT NOT NULL, \
             PRIMARY KEY(task_uuid, date), \
             FOREIGN KEY(task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE); \
         CREATE TABLE IF NOT EXISTS entry_links( \
-            parent_uuid TEXT, \
-            child_uuid TEXT, \
+            parent_uuid TEXT NOT NULL, \
+            child_uuid TEXT NOT NULL, \
             link_type INTEGER NOT NULL, \
             PRIMARY KEY(parent_uuid, child_uuid), \
             FOREIGN KEY(parent_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE, \
-            FOREIGN KEY(child_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE \
+            FOREIGN KEY(child_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE);",
+        // Table for storing sync state with external clients
+        "CREATE TABLE sync_state ( \
+            id INTEGER PRIMARY KEY CHECK (id = 1), \
+            last_server_version INTEGER NOT NULL \
+        );",
+        // Receipts tables for syncing with external clients
+        "CREATE TABLE IF NOT EXISTS timeblocks_receipts ( \
+            uuid TEXT PRIMARY KEY, \
+            modified_at INTEGER NOT NULL, \
+            deleted_at INTEGER \
+            FOREIGN KEY(uuid) REFERENCES timeblocks(uuid) \
+        ); \
+        CREATE TABLE IF NOT EXISTS timeblock_change_receipts ( \
+            uuid TEXT PRIMARY KEY, \
+            modified_at INTEGER NOT NULL, \
+            deleted_at INTEGER \
+            FOREIGN KEY(uuid) REFERENCES timeblocks(uuid) \
+        ); \
+        CREATE TABLE IF NOT EXISTS habit_entry_change_receipts ( \
+            task_uuid TEXT NOT NULL, \
+            date TEXT NOT NULL, \
+            modified_at INTEGER NOT NULL, \
+            deleted_at INTEGER \
+            PRIMARY KEY(task_uuid, date), \
+            FOREIGN KEY(task_uuid, date) REFERENCES habit_entries(task_uuid, date)); \
+        CREATE TABLE IF NOT EXISTS entry_link_change_receipts ( \
+            parent_uuid TEXT NOT NULL, \
+            child_uuid TEXT NOT NULL, \
+            modified_at INTEGER NOT NULL, \
+            deleted_at INTEGER \
+            PRIMARY KEY(parent_uuid, child_uuid), \
+            FOREIGN KEY(parent_uuid, child_uuid) REFERENCES entry_links(parent_uuid, child_uuid), \
         );"};
 
     for (int i = 0; i < sizeof(sql) / sizeof(sql[0]); i++)
