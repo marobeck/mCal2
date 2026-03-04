@@ -3,6 +3,9 @@ CREATE TABLE IF NOT EXISTS server_state (
     global_version INTEGER NOT NULL
 );
 
+INSERT OR IGNORE INTO server_state (id, global_version)
+VALUES (1, 0);
+
 -- Database mirror
 CREATE TABLE IF NOT EXISTS timeblocks (
     uuid TEXT PRIMARY KEY,
