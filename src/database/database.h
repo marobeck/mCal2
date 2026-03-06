@@ -35,8 +35,19 @@ namespace std
 
 class Database
 {
+    friend class Synchronizer; // Allow synchronizer to access private members for sync operations
 private:
     sqlite3 *db = nullptr;
+
+    // Helper functions for receipt tracking
+    void record_timeblock_receipt(const char *uuid);
+    void delete_timeblock_receipt(const char *uuid);
+    void record_task_receipt(const char *uuid);
+    void delete_task_receipt(const char *uuid);
+    void record_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
+    void delete_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
+    void record_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
+    void delete_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
 
 public:
     // -------------------------------------- Initialization ----------------------------------------
