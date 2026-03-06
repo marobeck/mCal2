@@ -26,11 +26,7 @@
 #include <string>
 
 // Asset folder for icons (used in official builds)
-#if 1
 const QString ASSET_FOLDER = "assets/";
-#else
-const QString ASSET_FOLDER = "../icons/";
-#endif
 
 /* -------------------------------------------------------------------------- */
 /*                                     GUI                                    */
@@ -111,8 +107,8 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "settings.png"), Scene::Settings);
 
     addRightEdgeButton(QIcon(ASSET_FOLDER + "todo_list.png"), Scene::TodoList);
-    // Force everything to the top
     rightEdgeLayout->addStretch();
+    addRightEdgeButton(QIcon(ASSET_FOLDER + "sync.png"), Scene::Sync);
 
     // Update the views with the current model
     modelChanged();
@@ -295,6 +291,23 @@ void MainWindow::switchRightPanel(Scene scene, QVariant data)
         // selection events are routed to NewEntryView for linking.
         rightStack->setCurrentWidget(todoListView);
         currentRightScene = Scene::NewEntryLink;
+        break;
+    case Scene::Sync:
+        // Show a loading message while syncing
+        QLabel *loading = new QLabel("Syncing with server...", rightStack);
+        loading->setAlignment(Qt::AlignCenter);
+        rightStack->addWidget(loading);
+        rightStack->setCurrentWidget(loading);
+
+        currentRightScene = Scene::Sync;
+        repo->sync();
+
+        // Clean up loading message
+        rightStack->removeWidget(loading);
+        delete loading;
+
+        // After syncing, show the todo list (which should be updated with any changes from the server)
+        switchRightPanel(Scene::TodoList);
         break;
     }
 

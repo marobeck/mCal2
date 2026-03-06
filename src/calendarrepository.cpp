@@ -12,12 +12,15 @@
 /* -------------------------------------------------------------------------- */
 
 CalendarRepository::CalendarRepository()
+    : m_synchronizer(new Synchronizer(m_db, this))
 {
+    connect(m_synchronizer, &Synchronizer::syncCompleted, this, &CalendarRepository::loadAll);
     loadAll();
 }
 
 CalendarRepository::~CalendarRepository()
 {
+    delete m_synchronizer;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -65,6 +68,11 @@ void CalendarRepository::loadAll()
     {
         tb.tasks = getTasksForTimeblock(tb.uuid);
     }
+}
+
+void CalendarRepository::sync()
+{
+    m_synchronizer->sync();
 }
 
 void CalendarRepository::habitCompletionPreview(Task &task)
