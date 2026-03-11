@@ -33,7 +33,7 @@ public:
     /* ------------------------------ Load from DB ------------------------------ */
     // Load everything from DB into memory
     void loadAll();
-    void sync(); // Sync with server
+    void sync();                                                         // Sync with server
     std::vector<Task *> getTasksForTimeblock(const UUID &timeblockUuid); // Load tasks for a specific timeblock into provided vector
     // --- Getters ---
     void habitCompletionPreview(Task &task); // fills task.completed_days with recent completions
@@ -43,7 +43,7 @@ public:
     // Tasks
     bool addTask(Task &task, size_t timeblockIndex);                // returns success
     bool removeTask(const char *taskUuid);                          // Delete task by UUID
-    bool updateTask(const Task &task);                                     // persist updated task
+    bool updateTask(const Task &task);                              // persist updated task
     bool moveTask(const char *taskUuid, const char *timeblockUuid); // move task to different timeblock
     // Habits
     bool addHabitEntry(const char *taskUuid, const char *dateIso8601);
@@ -67,8 +67,8 @@ signals:
     void modelChanged();
 
 private:
-    Database m_db; //  DB interface
-    Synchronizer* m_synchronizer; // Sync interface
+    Database m_db;                //  DB interface
+    Synchronizer *m_synchronizer; // Sync interface
 
     // All tasks are stored in hash map for O(1) access by UUID, timeblocks store pointers to their tasks for organization
     TaskHash m_tasks;                    // In-memory model of tasks, keyed by UUID for fast lookup

@@ -512,7 +512,7 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         return false;
     }
 
-    // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
+    // Update in-memory model: find the task and refresh its habit preview
     Task *habit = findTaskByUuid(taskUuid);
     if (habit)
     {
@@ -525,8 +525,9 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         m_db.add_habit_entry(taskUuid, dateIso8601); // Rollback database change since task doesn't exist in memory
         return false;
     }
-
+    // Notify listeners of change, reposition by urgency
     emit modelChanged();
+
     return true;
 }
 
