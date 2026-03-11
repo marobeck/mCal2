@@ -1,4 +1,4 @@
-from database import get_db
+from .database import get_db
 
 TABLES = {
     "timeblocks": {"pk": ["uuid"], "ledger": "timeblocks_ledger"},

@@ -67,6 +67,31 @@ time_t get_current_epoch()
 /*                          Receipt Tracking Helpers                          */
 /* -------------------------------------------------------------------------- */
 
+void Database::clear_receipts()
+{
+    const char *TAG = "DB::clear_receipts";
+    const char *sql[] = {
+        "DELETE FROM timeblock_change_receipts;",
+        "DELETE FROM task_change_receipts;",
+        "DELETE FROM habit_entry_change_receipts;",
+        "DELETE FROM entry_link_change_receipts;"
+    };
+
+    for (int i = 0; i < sizeof(sql) / sizeof(sql[0]); i++)
+    {
+        char *errmsg = NULL;
+        int rc = sqlite3_exec(db, sql[i], 0, 0, &errmsg);
+        if (rc != SQLITE_OK)
+        {
+            LOGE(TAG, "SQL error while clearing receipts: %s", errmsg);
+            sqlite3_free(errmsg);
+            throw rc;
+        }
+    }
+
+    LOGI(TAG, "Cleared all change receipts");
+}
+
 void Database::record_timeblock_receipt(const char *uuid)
 {
     const char *TAG = "DB::record_timeblock_receipt";

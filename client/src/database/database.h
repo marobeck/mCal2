@@ -48,12 +48,15 @@ private:
     void delete_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
     void record_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
     void delete_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
-
-public:
+    
+    public:
     // -------------------------------------- Initialization ----------------------------------------
     Database();
     ~Database();
-
+    
+    // ---------------------------------------- Receipt data ------------------------------------------
+    void clear_receipts();  // Clear all receipts (on completed sync)
+    
     // --------------------------------------- Timeblock Data -----------------------------------------
     void insert_timeblock(const Timeblock &tb);
     void load_timeblocks(std::vector<Timeblock> &timeblocks);

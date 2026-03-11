@@ -1,3 +1,5 @@
+PRAGMA foreign_keys = ON;
+
 CREATE TABLE IF NOT EXISTS server_state (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     global_version INTEGER NOT NULL

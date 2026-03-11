@@ -14,7 +14,11 @@
 CalendarRepository::CalendarRepository()
     : m_synchronizer(new Synchronizer(m_db, this))
 {
-    connect(m_synchronizer, &Synchronizer::syncCompleted, this, &CalendarRepository::loadAll);
+    connect(m_synchronizer, &Synchronizer::syncCompleted, this, [this]()
+            {
+                LOGI("CalendarRepository", "Sync completed, reloading all data from database");
+                m_db.clear_receipts(); // Clear receipts on completed sync
+                loadAll(); });
     loadAll();
 }
 
