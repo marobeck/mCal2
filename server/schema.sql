@@ -55,13 +55,15 @@ CREATE TABLE IF NOT EXISTS entry_links(
 CREATE TABLE IF NOT EXISTS timeblocks_ledger (
     uuid TEXT PRIMARY KEY,
     server_version INTEGER NOT NULL,
-    modified_at INTEGER NOT NULL
+    modified_at INTEGER NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS tasks_ledger (
     uuid TEXT PRIMARY KEY,
     server_version INTEGER NOT NULL,
-    modified_at INTEGER NOT NULL
+    modified_at INTEGER NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS habit_entries_ledger (
@@ -69,6 +71,7 @@ CREATE TABLE IF NOT EXISTS habit_entries_ledger (
     date TEXT NOT NULL,
     server_version INTEGER NOT NULL,
     modified_at INTEGER NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT 0,
     PRIMARY KEY(task_uuid, date)
 );
 
@@ -77,5 +80,6 @@ CREATE TABLE IF NOT EXISTS entry_links_ledger (
     child_uuid TEXT NOT NULL,
     server_version INTEGER NOT NULL,
     modified_at INTEGER NOT NULL,
+    deleted BOOLEAN NOT NULL DEFAULT 0,
     PRIMARY KEY(parent_uuid, child_uuid)
 );

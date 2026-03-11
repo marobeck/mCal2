@@ -40,14 +40,15 @@ private:
     sqlite3 *db = nullptr;
 
     // Helper functions for receipt tracking
-    void record_timeblock_receipt(const char *uuid);
-    void delete_timeblock_receipt(const char *uuid);
-    void record_task_receipt(const char *uuid);
-    void delete_task_receipt(const char *uuid);
+    // For timeblocks and tasks we store a snapshot of the object so receipts are self-contained.
+    void record_timeblock_receipt(const Timeblock &tb, bool deleted = false);
+    void delete_timeblock_receipt(const Timeblock &tb); // convenience wrapper
+    void record_task_receipt(const Task &task, bool deleted = false);
+    void delete_task_receipt(const char *uuid); // convenience wrapper
     void record_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
     void delete_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
-    void record_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
-    void delete_entry_link_receipt(const char *parent_uuid, const char *child_uuid);
+    void record_entry_link_receipt(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void delete_entry_link_receipt(const char *parent_uuid, const char *child_uuid, LinkType link_type);
     
     public:
     // -------------------------------------- Initialization ----------------------------------------
