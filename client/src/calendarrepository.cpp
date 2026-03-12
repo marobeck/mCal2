@@ -16,8 +16,8 @@ CalendarRepository::CalendarRepository()
 {
     connect(m_synchronizer, &Synchronizer::syncCompleted, this, [this]()
             {
-                LOGI("CalendarRepository", "Sync completed, reloading all data from database");
                 m_db.clear_receipts(); // Clear receipts on completed sync
+                LOGI("CalendarRepository", "Sync completed, reloading all data from database");
                 loadAll(); });
     loadAll();
 }
@@ -57,9 +57,15 @@ void CalendarRepository::loadAll()
     m_db.load_timeblocks(m_timeblocks);
     m_db.load_tasks(m_tasks);
 
-    // Load habit preview for any habit tasks
+    // Fill tasks with relational data
     for (auto &[uuid, taskptr] : m_tasks)
     {
+        // Load task links
+        std::vector<char *> prereqUuids;
+        m_db.get_linked_entries(uuid, LinkType::DEPENDENCY, prereqUuids);
+        findTasksByList(prereqUuids, taskptr->prerequisites);
+
+        // Load habit preview for any habit tasks
         if (taskptr->status == TaskStatus::HABIT)
         {
             // Load habit completion preview
@@ -72,6 +78,8 @@ void CalendarRepository::loadAll()
     {
         tb.tasks = getTasksForTimeblock(tb.uuid);
     }
+
+    emit modelChanged();
 }
 
 void CalendarRepository::sync()
@@ -214,6 +222,18 @@ Task *CalendarRepository::findTaskByUuid(const char *uuid)
         return it->second.get();
     }
     return nullptr;
+}
+
+void CalendarRepository::findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks)
+{
+    for (const char *uuid : uuids)
+    {
+        Task *t = findTaskByUuid(uuid);
+        if (t)
+        {
+            outTasks.push_back(t);
+        }
+    }
 }
 
 Timeblock *CalendarRepository::findTimeblockByUuid(const char *uuid)
