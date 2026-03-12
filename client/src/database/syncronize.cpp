@@ -207,14 +207,8 @@ void Synchronizer::applyServerChanges(const QJsonArray &entries, int newServerVe
                 tb.start = data["start"].toVariant().toLongLong();
                 tb.day_start = data["day_start"].toVariant().toLongLong();
                 tb.completed_datetime = data["completed_datetime"].toVariant().toLongLong();
-                try
-                {
-                    db.insert_timeblock(tb);
-                }
-                catch (...)
-                {
-                    db.update_timeblock(tb);
-                }
+
+                db.upsert_timeblock(tb); // Update or insert
             }
         }
         else if (table == "tasks")
@@ -237,14 +231,8 @@ void Synchronizer::applyServerChanges(const QJsonArray &entries, int newServerVe
                 task.status = static_cast<TaskStatus>(data["status"].toInt());
                 task.goal_spec = GoalSpec::from_sql(data["goal_spec"].toInt());
                 task.completed_datetime = data["completed_datetime"].toVariant().toLongLong();
-                try
-                {
-                    db.insert_task(task);
-                }
-                catch (...)
-                {
-                    db.update_task(task);
-                }
+                
+                db.upsert_task(task); // Update or insert
             }
         }
         else if (table == "habit_entries")

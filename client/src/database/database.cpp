@@ -177,7 +177,7 @@ void Database::record_task_receipt(const Task &task, bool deleted)
     }
 }
 
-void Database::delete_task_receipt(const char *uuid)
+void Database::delete_task_receipt(const Task &task)
 {
     const char *TAG = "DB::record_task_receipt";
     const char *sql =
@@ -192,25 +192,24 @@ void Database::delete_task_receipt(const char *uuid)
         throw sqlite3_errcode(db);
     }
 
-    // For deletions we only need to store the UUID and set the deleted_at timestamp; other fields can be left blank or null since they won't be used
-    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, "", -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, "", -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 4, "", -1, SQLITE_STATIC);
-    sqlite3_bind_int64(stmt, 5, 0);
-    sqlite3_bind_int(stmt, 6, 0);
-    sqlite3_bind_int(stmt, 7, static_cast<int>(Scope::NONE));
-    sqlite3_bind_int(stmt, 8, static_cast<int>(TaskStatus::INCOMPLETE));
-    sqlite3_bind_int(stmt, 9, 0);
-    sqlite3_bind_int64(stmt, 10, 0);
+    sqlite3_bind_text(stmt, 1, task.uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.timeblock_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, task.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, task.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 5, task.due_date);
+    sqlite3_bind_int(stmt, 6, static_cast<int>(task.priority));
+    sqlite3_bind_int(stmt, 7, static_cast<int>(task.scope));
+    sqlite3_bind_int(stmt, 8, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 9, task.goal_spec.to_sql());
+    sqlite3_bind_int64(stmt, 10, task.completed_datetime);
     sqlite3_bind_int64(stmt, 11, get_current_epoch());
-    sqlite3_bind_int64(stmt, 12, get_current_epoch());
+    sqlite3_bind_int64(stmt, 12, get_current_epoch()); // Set deleted_at to current time to indicate deletion
 
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
     if (rc != SQLITE_DONE)
     {
-        LOGE(TAG, "Failed to record task receipt for UUID <%s>: %s", uuid, sqlite3_errmsg(db));
+        LOGE(TAG, "Failed to record task receipt for UUID <%s>: %s", task.uuid, sqlite3_errmsg(db));
         throw sqlite3_errcode(db);
     }
 }
@@ -630,33 +629,25 @@ void Database::update_timeblock(const Timeblock &tb)
     throw sqlite3_errcode(db);
 }
 
-void Database::delete_timeblock(const char *uuid)
+void Database::upsert_timeblock(const Timeblock &tb)
 {
-    const char *TAG = "DB::delete_timeblock";
+    const char *TAG = "DB::upsert_timeblock";
 
-    // fetch current row so we can record a snapshot before deleting
-    Timeblock tb;
-    const char *fetchSql = "SELECT * FROM timeblocks WHERE uuid = ?;";
-    sqlite3_stmt *fetchStmt;
-    if (sqlite3_prepare_v2(db, fetchSql, -1, &fetchStmt, nullptr) == SQLITE_OK)
-    {
-        sqlite3_bind_text(fetchStmt, 1, uuid, -1, SQLITE_STATIC);
-        if (sqlite3_step(fetchStmt) == SQLITE_ROW)
-        {
-            strncpy(tb.uuid.value, (const char *)sqlite3_column_text(fetchStmt, 0), UUID_LEN);
-            tb.status = static_cast<TimeblockStatus>(sqlite3_column_int(fetchStmt, 1));
-            tb.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(fetchStmt, 2)));
-            tb.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(fetchStmt, 3)));
-            tb.day_frequency = GoalSpec::from_sql(sqlite3_column_int(fetchStmt, 4));
-            tb.duration = sqlite3_column_int64(fetchStmt, 5);
-            tb.start = sqlite3_column_int64(fetchStmt, 6);
-            tb.day_start = sqlite3_column_int64(fetchStmt, 7);
-            tb.completed_datetime = sqlite3_column_int64(fetchStmt, 8);
-        }
-        sqlite3_finalize(fetchStmt);
-    }
+    // INSERT with ON CONFLICT clause to perform an upsert based on the UUID primary key.
+    // Removes need for a separate existence check before deciding to insert or update.
+    const char *sql =
+        "INSERT INTO timeblocks (uuid, status, name, description, day_frequency, duration, start, day_start, completed_datetime) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(uuid) DO UPDATE SET "
+        "status = excluded.status, "
+        "name = excluded.name, "
+        "description = excluded.description, "
+        "day_frequency = excluded.day_frequency, "
+        "duration = excluded.duration, "
+        "start = excluded.start, "
+        "day_start = excluded.day_start, "
+        "completed_datetime = excluded.completed_datetime;";
 
-    const char *sql = "DELETE FROM timeblocks WHERE uuid = ?;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -665,19 +656,96 @@ void Database::delete_timeblock(const char *uuid)
         throw sqlite3_errcode(db);
     }
 
-    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 1, tb.uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(tb.status));
+    sqlite3_bind_text(stmt, 3, tb.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, tb.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 5, tb.day_frequency.to_sql());
+    sqlite3_bind_int64(stmt, 6, tb.duration);
+    sqlite3_bind_int64(stmt, 7, tb.start);
+    sqlite3_bind_int64(stmt, 8, tb.day_start);
+    sqlite3_bind_int64(stmt, 9, tb.completed_datetime);
+
     int rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
+
     if (rc == SQLITE_DONE)
     {
-        LOGI(TAG, "Deleted timeblock with UUID: %s", uuid);
-        // record snapshot for deletion (tb may still contain strdup'd name/desc)
-        delete_timeblock_receipt(tb);
-        free(tb.name);
-        free(tb.desc);
+        LOGI(TAG, "Upserted timeblock <%s>", tb.name);
+        record_timeblock_receipt(tb, false);
         return;
     }
-    LOGE(TAG, "Failed to delete timeblock with UUID: %s", uuid);
+
+    LOGE(TAG, "Failed to upsert timeblock <%s>: %s", tb.name, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
+void Database::delete_timeblock(const char *uuid, bool ignore_failure)
+{
+    const char *TAG = "DB::delete_timeblock";
+
+    const char *sql =
+        "DELETE FROM timeblocks "
+        "WHERE uuid = ? "
+        "RETURNING uuid, status, name, description, day_frequency, "
+        "duration, start, day_start, completed_datetime;";
+
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
+
+    int rc = sqlite3_step(stmt);
+
+    if (rc == SQLITE_ROW)
+    {
+        Timeblock tb;
+
+        strncpy(tb.uuid.value,
+                reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)),
+                UUID_LEN);
+
+        tb.status = static_cast<TimeblockStatus>(sqlite3_column_int(stmt, 1));
+        tb.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        tb.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        tb.day_frequency = GoalSpec::from_sql(sqlite3_column_int(stmt, 4));
+        tb.duration = sqlite3_column_int64(stmt, 5);
+        tb.start = sqlite3_column_int64(stmt, 6);
+        tb.day_start = sqlite3_column_int64(stmt, 7);
+        tb.completed_datetime = sqlite3_column_int64(stmt, 8);
+
+        sqlite3_finalize(stmt);
+
+        LOGI(TAG, "Deleted timeblock with UUID: %s", uuid);
+
+        delete_timeblock_receipt(tb);
+
+        free(tb.name);
+        free(tb.desc);
+
+        return;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (rc == SQLITE_DONE)
+    {
+        if (ignore_failure)
+        {
+            LOGI(TAG, "Delete ignored (timeblock not found): %s", uuid);
+            return;
+        }
+
+        LOGE(TAG, "No timeblock found with UUID: %s", uuid);
+        throw SQLITE_NOTFOUND;
+    }
+
+    LOGE(TAG, "Failed to delete timeblock %s: %s", uuid, sqlite3_errmsg(db));
     throw sqlite3_errcode(db);
 }
 
@@ -835,11 +903,67 @@ void Database::update_task(const Task &task)
     throw sqlite3_errcode(db);
 }
 
-void Database::delete_task(const char *uuid)
+void Database::upsert_task(const Task &task)
+{
+    const char *TAG = "DB::upsert_task";
+
+    // INSERT with ON CONFLICT clause to perform an upsert based on the UUID primary key.
+    // Removes need for a separate existence check before deciding to insert or update.
+    const char *sql =
+        "INSERT INTO tasks (uuid, timeblock_uuid, name, description, due_date, priority, scope, status, goal_spec, completed_datetime) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(uuid) DO UPDATE SET "
+        "timeblock_uuid = excluded.timeblock_uuid, "
+        "name = excluded.name, "
+        "description = excluded.description, "
+        "due_date = excluded.due_date, "
+        "priority = excluded.priority, "
+        "scope = excluded.scope, "
+        "status = excluded.status, "
+        "goal_spec = excluded.goal_spec, "
+        "completed_datetime = excluded.completed_datetime;";
+
+    sqlite3_stmt *stmt;
+
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    {
+        LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    sqlite3_bind_text(stmt, 1, task.uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 2, task.timeblock_uuid, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 3, task.name, -1, SQLITE_STATIC);
+    sqlite3_bind_text(stmt, 4, task.desc, -1, SQLITE_STATIC);
+    sqlite3_bind_int64(stmt, 5, task.due_date);
+    sqlite3_bind_int(stmt, 6, static_cast<int>(task.priority));
+    sqlite3_bind_int(stmt, 7, static_cast<int>(task.scope));
+    sqlite3_bind_int(stmt, 8, static_cast<int>(task.status));
+    sqlite3_bind_int(stmt, 9, task.goal_spec.to_sql());
+    sqlite3_bind_int64(stmt, 10, task.completed_datetime);
+
+    int rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc == SQLITE_DONE)
+    {
+        LOGI(TAG, "Upserted task <%s>", task.name);
+        record_task_receipt(task, false);
+        return;
+    }
+
+    LOGE(TAG, "Failed to upsert task <%s>: %s", task.name, sqlite3_errmsg(db));
+    throw sqlite3_errcode(db);
+}
+
+void Database::delete_task(const char *uuid, bool ignore_failure)
 {
     const char *TAG = "DB::delete_task";
 
-    const char *sql = "DELETE FROM tasks WHERE uuid = ?;";
+    const char *sql = "DELETE FROM tasks "
+                      "WHERE uuid = ?"
+                      "RETURNING uuid, timeblock_uuid, name, description, "
+                      "due_date, priority, scope, status, goal_spec, completed_datetime;";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -850,14 +974,51 @@ void Database::delete_task(const char *uuid)
 
     sqlite3_bind_text(stmt, 1, uuid, -1, SQLITE_STATIC);
     int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    if (rc == SQLITE_DONE)
+
+    if (rc == SQLITE_ROW)
     {
+        Task task;
+
+        strncpy(task.uuid.value,
+                reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0)),
+                UUID_LEN);
+
+        strncpy(task.timeblock_uuid.value,
+                reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1)),
+                UUID_LEN);
+
+        task.name = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 2)));
+        task.desc = strdup(reinterpret_cast<const char *>(sqlite3_column_text(stmt, 3)));
+        task.due_date = sqlite3_column_int64(stmt, 4);
+        task.priority = static_cast<Priority>(sqlite3_column_int(stmt, 5));
+        task.scope = static_cast<Scope>(sqlite3_column_int(stmt, 6));
+        task.status = static_cast<TaskStatus>(sqlite3_column_int(stmt, 7));
+        task.goal_spec = GoalSpec::from_sql(sqlite3_column_int(stmt, 8));
+        task.completed_datetime = sqlite3_column_int64(stmt, 9);
+
+        sqlite3_finalize(stmt);
+
         LOGI(TAG, "Deleted task with UUID: %s", uuid);
-        // Record deletion receipt using snapshot
-        delete_task_receipt(uuid);
+
+        delete_task_receipt(task);
+
         return;
     }
+
+    sqlite3_finalize(stmt);
+
+    if (rc == SQLITE_DONE)
+    {
+        if (ignore_failure)
+        {
+            LOGI(TAG, "Delete ignored (task not found): %s", uuid);
+            return;
+        }
+
+        LOGE(TAG, "No task found with UUID: %s", uuid);
+        throw SQLITE_NOTFOUND;
+    }
+
     LOGE(TAG, "Failed to delete task with UUID: %s", uuid);
     throw sqlite3_errcode(db);
 }
@@ -906,6 +1067,8 @@ void Database::remove_habit_entry(const char *task_uuid, const char *date_iso860
         return;
     }
 
+    // We don't need to check if the deletion actually removed a row since either way the end result is that the habit entry doesn't exist, which is what we want.
+    // We just need to make sure to record a deletion receipt if it did exist so that external clients can sync this change.
     const char *sql = "DELETE FROM habit_entries WHERE task_uuid = ? AND date = ?;";
     sqlite3_stmt *stmt;
 
@@ -1071,7 +1234,7 @@ void Database::add_entry_link(const char *parent_uuid, const char *child_uuid, L
 {
     const char *TAG = "DB::add_entry_link";
 
-    const char *sql = "INSERT INTO entry_links (parent_uuid, child_uuid, link_type) VALUES (?, ?, ?);";
+    const char *sql = "INSERT OR IGNORE INTO entry_links (parent_uuid, child_uuid, link_type) VALUES (?, ?, ?);";
     sqlite3_stmt *stmt;
 
     if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
@@ -1129,10 +1292,15 @@ void Database::remove_all_links_for_task(const char *task_uuid)
 {
     const char *TAG = "DB::remove_all_links_for_task";
 
-    const char *sql = "DELETE FROM entry_links WHERE parent_uuid = ? OR child_uuid = ?;";
+    // Delete all links where the task is either the parent or child, and return the deleted links so we can record receipts for them
+    const char *sql =
+        "DELETE FROM entry_links "
+        "WHERE parent_uuid = ? OR child_uuid = ? "
+        "RETURNING parent_uuid, child_uuid, link_type;";
+
     sqlite3_stmt *stmt;
 
-    if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) != SQLITE_OK)
+    if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) != SQLITE_OK)
     {
         LOGE(TAG, "Failed to prepare statement: %s", sqlite3_errmsg(db));
         throw sqlite3_errcode(db);
@@ -1141,15 +1309,32 @@ void Database::remove_all_links_for_task(const char *task_uuid)
     sqlite3_bind_text(stmt, 1, task_uuid, -1, SQLITE_STATIC);
     sqlite3_bind_text(stmt, 2, task_uuid, -1, SQLITE_STATIC);
 
-    int rc = sqlite3_step(stmt);
-    sqlite3_finalize(stmt);
-    if (rc == SQLITE_DONE)
+    int rc;
+    int count = 0;
+
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW)
     {
-        LOGI(TAG, "Removed all entry links for task <%s>", task_uuid);
-        return;
+        const char *parent_uuid =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 0));
+        const char *child_uuid =
+            reinterpret_cast<const char *>(sqlite3_column_text(stmt, 1));
+        LinkType link_type = static_cast<LinkType>(sqlite3_column_int(stmt, 2));
+
+        delete_entry_link_receipt(parent_uuid, child_uuid, link_type);
+
+        count++;
     }
-    LOGE(TAG, "Failed to remove entry links for task <%s>: %s", task_uuid, sqlite3_errmsg(db));
-    throw sqlite3_errcode(db);
+
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE)
+    {
+        LOGE(TAG, "Failed to remove entry links for task <%s>: %s",
+             task_uuid, sqlite3_errmsg(db));
+        throw sqlite3_errcode(db);
+    }
+
+    LOGI(TAG, "Removed %d entry links for task <%s>", count, task_uuid);
 }
 
 void Database::get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids)
