@@ -1,23 +1,66 @@
 #include "syncronize.h"
+#include "clientconfig.h"
 
+// Networking
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QSslConfiguration>
+#include <QSslCertificate>
+#include <QSslKey>
+#include <QUrl>
+#include <QFile>
+
+// Parsing
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QUrl>
 #include <QDebug>
 #include <QEventLoop>
 
 Synchronizer::Synchronizer(Database &db, QObject *parent)
     : QObject(parent), db(db), networkManager(new QNetworkAccessManager(this))
 {
+    // Get server URL and client ID from config
+    serverUrl = ClientConfig::serverAddress();
+    clientId = ClientConfig::clientId();
+
     connect(networkManager, &QNetworkAccessManager::finished, this, &Synchronizer::onSyncReply);
     lastServerVersion = getLastServerVersion();
+
+    // --- TLS Setup ---
+
+    QFile certFile(ClientConfig::clientCertPath());
+    QFile keyFile(ClientConfig::clientKeyPath());
+    QFile caFile(ClientConfig::serverCaPath());
+
+    certFile.open(QIODevice::ReadOnly);
+    keyFile.open(QIODevice::ReadOnly);
+    caFile.open(QIODevice::ReadOnly);
+
+    QSslCertificate clientCert(&certFile, QSsl::Pem);
+    QSslKey clientKey(&keyFile, QSsl::Rsa, QSsl::Pem);
+    QSslCertificate serverCA(&caFile, QSsl::Pem);
+
+    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+
+    sslConfig.setLocalCertificate(clientCert);
+    sslConfig.setPrivateKey(clientKey);
+
+    QList<QSslCertificate> caList;
+    caList.append(serverCA);
+    sslConfig.setCaCertificates(caList);
+
+    QSslConfiguration::setDefaultConfiguration(sslConfig);
 }
 
 void Synchronizer::sync()
 {
+    if (!ClientConfig::syncEnabled())
+    {
+        qDebug() << "Sync is disabled in config, skipping sync.";
+        return;
+    }
+
     QJsonArray changes = collectLocalChanges();
 
     QJsonObject payload;
@@ -28,8 +71,18 @@ void Synchronizer::sync()
     QJsonDocument doc(payload);
     QByteArray data = doc.toJson();
 
-    QNetworkRequest request = QNetworkRequest(QUrl(serverUrl));
+    // Construct https request to server
+    QUrl url(serverUrl);
+    url.setScheme("https");
+    url.setPort(ClientConfig::serverPort());
+
+    QNetworkRequest request(url);
     request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    // Set SSL configuration for the request
+    QSslConfiguration sslConfig = QSslConfiguration::defaultConfiguration();
+    sslConfig.setPeerVerifyMode(QSslSocket::VerifyPeer);
+    request.setSslConfiguration(sslConfig);
 
     networkManager->post(request, data);
 }
@@ -231,7 +284,7 @@ void Synchronizer::applyServerChanges(const QJsonArray &entries, int newServerVe
                 task.status = static_cast<TaskStatus>(data["status"].toInt());
                 task.goal_spec = GoalSpec::from_sql(data["goal_spec"].toInt());
                 task.completed_datetime = data["completed_datetime"].toVariant().toLongLong();
-                
+
                 db.upsert_task(task); // Update or insert
             }
         }
