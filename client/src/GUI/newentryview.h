@@ -17,6 +17,7 @@
 #include <QSpinBox>
 #include <QCheckBox>
 #include <QPushButton>
+#include <QListWidget>
 #include <vector>
 
 class Timeblock;
@@ -35,8 +36,8 @@ public:
     void clearFields();
     // When in NewEntryLink mode, preview a candidate prerequisite task (nullptr to cancel)
     void previewPrerequisite(const Task *task);
-    // Return the selected prerequisite UUID (empty if none)
-    std::string takePrereqUuid();
+    // Return the selected prerequisite tasks (empty if none)
+    void getPrerequisites(std::vector<Task *> &prerequisits);
 signals:
     // Emitted when the user creates a new task. Caller receives ownership of the Task*
     void taskCreated(Task *task, int timeblockIndex);
@@ -79,15 +80,22 @@ private:
     QPushButton *m_createBtn = nullptr;
 
     // Prerequisite UI
+    QListWidget *m_prereqList = nullptr;
     QWidget *m_prereqBox = nullptr;
-    QPushButton *m_prereqPlusBtn = nullptr;
+    QWidget *m_buttonRow = nullptr;
+    QWidget *m_linkRow = nullptr;
+    QPushButton *m_addBtn = nullptr;
+    QPushButton *m_removeBtn = nullptr;
     QPushButton *m_prereqOkBtn = nullptr;
     QPushButton *m_prereqCancelBtn = nullptr;
     QWidget *m_prereqPreviewArea = nullptr;
     TaskItemWidget *m_prereqPreviewWidget = nullptr;
-    std::string m_prereqUuid;
+    // Hold prereq tasks for selecton
+    std::vector<Task *> m_prereqCandidates = {}; // Candidate tasks for prerequisite selection, owned by caller (don't manage memory here)
+    Task *m_selectedPrereq = nullptr; // Pointer to selected prerequisite task, owned by caller (don't manage memory here)
     bool m_linkModeActive = false;
-    void onPrereqPlusClicked();
+    void onAddClicked();
+    void onRemoveClicked();
     void onPrereqOkClicked();
     void onPrereqCancelClicked();
 };
