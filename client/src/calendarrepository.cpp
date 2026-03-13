@@ -333,6 +333,17 @@ bool CalendarRepository::removeTask(const char *taskUuid)
         return false;
     }
 
+    // Remove all links
+    try
+    {
+        m_db.remove_all_links_for_task(taskUuid);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to delete task from database: %d", err);
+        return false;
+    }
+
     // Remove from database
     try
     {
@@ -692,6 +703,28 @@ bool CalendarRepository::removeAllLinksForTask(Task *task)
         prereq->prerequisites.erase(std::remove(prereq->prerequisites.begin(), prereq->prerequisites.end(), task), prereq->prerequisites.end());
         LOGI(TAG, "Removed prerequisite link in memory: <%s> no longer depends on <%s>", prereq->name, task->name);
     }
+
+    task->prerequisites.clear();
+    LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
+    return true;
+}
+
+bool CalendarRepository::removeAllChildrenForTask(Task *task)
+{
+    const char *TAG = "CalendarRepository::removeAllLinksForTask";
+
+    try
+    {
+        m_db.remove_all_child_links_for_task(task->uuid);
+        LOGI(TAG, "Removed all child entry links of <%s> from database", task->name);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to remove all entry links for task from database: %d", err);
+        return false;
+    }
+
+    // --- Update in-memory model ---
 
     task->prerequisites.clear();
     LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
