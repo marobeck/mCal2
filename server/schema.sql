@@ -5,8 +5,18 @@ CREATE TABLE IF NOT EXISTS server_state (
     global_version INTEGER NOT NULL
 );
 
-INSERT OR IGNORE INTO server_state (id, global_version)
-VALUES (1, 0);
+INSERT
+    OR IGNORE INTO server_state (id, global_version)
+VALUES
+    (1, 0);
+
+CREATE TABLE IF NOT EXISTS clients (
+    client_id TEXT PRIMARY KEY,
+    display_name TEXT,
+    permissions INTEGER,
+    last_seen INTEGER,
+    revoked INTEGER DEFAULT 0
+);
 
 -- Database mirror
 CREATE TABLE IF NOT EXISTS timeblocks (

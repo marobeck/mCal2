@@ -5,6 +5,7 @@
 // --- Data handling ---
 #include "timeblock.h"
 #include "database.h"
+#include "clientconfig.h"
 
 #include <QApplication> // UI app
 
@@ -14,6 +15,9 @@ int main(int argc, char *argv[])
 
     QApplication app(argc, argv);
     qRegisterMetaType<const Task *>("const Task*");
+
+    // Set up client configuraton
+    ClientConfig config;
 
     // Initialize database and data repository
     CalendarRepository dbs;

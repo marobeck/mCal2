@@ -47,11 +47,15 @@ QString ClientConfig::settingsFilePath()
     // Use asset folder
     QString assetPath = QCoreApplication::applicationDirPath() + "/assets";
     if (QDir(assetPath).exists())
+    {
+        // LOGI("ClientConfig", "Using asset directory for settings: %s", assetPath.toStdString().c_str());
         return assetPath + "/settings.ini";
+    }
     else
     {
         // Fallback to standard config location
         QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+        LOGW("ClientConfig", "Asset directory not found at %s; falling back to standard config location %s", assetPath.toStdString().c_str(), configDir.toStdString().c_str());
         QDir().mkpath(configDir); // Ensure directory exists
         return configDir + "/settings.ini";
     }
@@ -91,20 +95,18 @@ QString ClientConfig::clientId()
 
 QString ClientConfig::clientCertPath()
 {
-    QString path = settingsFilePath();
-    QSettings s(path, QSettings::IniFormat);
-    return s.value("Sync/client_cert", "certs/client.crt").toString();
+    QSettings s(settingsFilePath(), QSettings::IniFormat);
+    return s.value("Sync/client_cert_path", "certs/client.crt").toString();
 }
 
 QString ClientConfig::clientKeyPath()
 {
-    QString path = settingsFilePath();
-    QSettings s(path, QSettings::IniFormat);
-    return s.value("Sync/client_key", "certs/client.key").toString();
+    QSettings s(settingsFilePath(), QSettings::IniFormat);
+    return s.value("Sync/client_key_path", "certs/client.key").toString();
 }
+
 QString ClientConfig::serverCaPath()
 {
-    QString path = settingsFilePath();
-    QSettings s(path, QSettings::IniFormat);
-    return s.value("Sync/server_ca", "certs/server_ca.crt").toString();
+    QSettings s(settingsFilePath(), QSettings::IniFormat);
+    return s.value("Sync/server_ca_path", "certs/server_ca.crt").toString();
 }

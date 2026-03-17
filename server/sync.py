@@ -58,7 +58,9 @@ def apply_entry(conn, table, data):
         if k not in {"modified_at", "deleted_at"}:
             main_data[k] = v
 
-    print(f"Applying to table {table} with main_data {main_data} and ledger data modified_at={data['modified_at']} deleted_at={data.get('deleted_at')}")
+    print(
+        f"Applying to table {table} with main_data {main_data} and ledger data modified_at={data['modified_at']} deleted_at={data.get('deleted_at')}"
+    )
 
     # Delete or update main table record
     if data.get("deleted_at"):
@@ -68,7 +70,8 @@ def apply_entry(conn, table, data):
         columns = ", ".join(main_data.keys())
         placeholders = ", ".join(["?"] * len(main_data))
         conn.execute(
-            f"REPLACE INTO {table} ({columns}) VALUES ({placeholders})", list(main_data.values())
+            f"REPLACE INTO {table} ({columns}) VALUES ({placeholders})",
+            list(main_data.values()),
         )
 
     # Increment version
@@ -76,8 +79,14 @@ def apply_entry(conn, table, data):
 
     # Update ledger
     ledger_columns = pk_fields + ["server_version", "modified_at", "deleted"]
-    ledger_values = pk_values + [new_version, data["modified_at"], 1 if data.get("deleted_at") else 0]
+    ledger_values = pk_values + [
+        new_version,
+        data["modified_at"],
+        1 if data.get("deleted_at") else 0,
+    ]
 
+    # Replace into ledger
+    # Note: This can be used as the ledgers lack forign keys so nothing will break
     ledger_placeholders = ", ".join(["?"] * len(ledger_columns))
     conn.execute(
         f"""
@@ -129,12 +138,18 @@ def collect_deltas(conn, last_version):
                 data["deleted"] = False
                 # Add all other fields from main table
                 for k, v in row_dict.items():
-                    if k not in pk_fields and k not in {"modified_at", "server_version", "deleted"}:
+                    if k not in pk_fields and k not in {
+                        "modified_at",
+                        "server_version",
+                        "deleted",
+                    }:
                         data[k] = v
 
             results.append({"table": table, "data": data})
 
-    print(f"Collected {len(results)} deltas since version {last_version} -> {get_global_version(conn)}")
+    print(
+        f"Collected {len(results)} deltas since version {last_version} -> {get_global_version(conn)}"
+    )
     return results
 
 
@@ -143,7 +158,9 @@ def process_sync(request):
     try:
         conn.execute("BEGIN")
 
-        print(f"Processing sync for client {request.client_id} with last_server_version {request.last_server_version}")
+        print(
+            f"Processing sync for client {request.client_id} with last_server_version {request.last_server_version}"
+        )
         print(f"Received {len(request.entries)} entries from client")
 
         for entry in request.entries:
@@ -153,7 +170,9 @@ def process_sync(request):
         new_version = get_global_version(conn)
         deltas = collect_deltas(conn, request.last_server_version)
 
-        print(f"Sync processed for client {request.client_id}. New version: {new_version}")
+        print(
+            f"Sync processed for client {request.client_id}. New version: {new_version}"
+        )
         for delta in deltas:
             print(f"Delta to send: table `{delta['table']}` with data {delta['data']}")
 

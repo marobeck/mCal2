@@ -1,5 +1,6 @@
 #include "syncronize.h"
 #include "clientconfig.h"
+#include "log.h"
 
 // Networking
 #include <QNetworkRequest>
@@ -20,6 +21,8 @@
 Synchronizer::Synchronizer(Database &db, QObject *parent)
     : QObject(parent), db(db), networkManager(new QNetworkAccessManager(this))
 {
+    const char *TAG = "Synchronizer::Constructor";
+
     // Get server URL and client ID from config
     serverUrl = ClientConfig::serverAddress();
     clientId = ClientConfig::clientId();
@@ -27,8 +30,22 @@ Synchronizer::Synchronizer(Database &db, QObject *parent)
     connect(networkManager, &QNetworkAccessManager::finished, this, &Synchronizer::onSyncReply);
     lastServerVersion = getLastServerVersion();
 
+    // Error checking
+    connect(networkManager, &QNetworkAccessManager::sslErrors,
+            [](QNetworkReply *, const QList<QSslError> &errors)
+            {
+                for (const auto &e : errors)
+                {
+                    LOGE("Synchronizer::sslErrors", "SSL error: %s", qPrintable(e.errorString()));
+                }
+            });
+
     // --- TLS Setup ---
 
+    LOGI(TAG, "Setting up TLS configuration for sync");
+    LOGI(TAG, "Client cert path: %s", qPrintable(ClientConfig::clientCertPath()));
+    LOGI(TAG, "Client key path: %s", qPrintable(ClientConfig::clientKeyPath()));
+    LOGI(TAG, "Server CA path: %s", qPrintable(ClientConfig::serverCaPath()));
     QFile certFile(ClientConfig::clientCertPath());
     QFile keyFile(ClientConfig::clientKeyPath());
     QFile caFile(ClientConfig::serverCaPath());
@@ -55,9 +72,11 @@ Synchronizer::Synchronizer(Database &db, QObject *parent)
 
 void Synchronizer::sync()
 {
+    const char *TAG = "Synchronizer::sync";
+
     if (!ClientConfig::syncEnabled())
     {
-        qDebug() << "Sync is disabled in config, skipping sync.";
+        LOGI(TAG, "Sync is disabled in config, skipping sync.");
         return;
     }
 
@@ -89,9 +108,18 @@ void Synchronizer::sync()
 
 void Synchronizer::onSyncReply(QNetworkReply *reply)
 {
+    const char *TAG = "Synchronizer::onSyncReply";
+
+    if (reply->url().toString() != serverUrl)
+    {
+        LOGW(TAG, "Received reply from unexpected URL: %s", qPrintable(reply->url().toString()));
+        reply->deleteLater();
+        return;
+    }
+
     if (reply->error() != QNetworkReply::NoError)
     {
-        qWarning() << "Sync request failed:" << reply->errorString();
+        LOGE(TAG, "Sync request failed: %s", qPrintable(reply->errorString()));
         reply->deleteLater();
         return;
     }
