@@ -23,7 +23,6 @@ def init_db():
 
     with open(schema_path, "r") as f:
         schema = f.read()
-        print(f"Applying schema from {schema_path}:\n{schema}")
     conn.executescript(schema)
     conn.commit()
 
