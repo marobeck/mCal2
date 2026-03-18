@@ -1,6 +1,13 @@
 # IDE files
 .vscode/
 
+# Binary files
+.env/
+
 # Build files
 build/
 *.o
+__pycache__/
+
+# Database files
+*.db

@@ -9,10 +9,7 @@
 #include <unordered_map>
 #include <memory>
 
-#include "uuid.h"
-#include "database.h"
-#include "timeblock.h"
-#include "task.h"
+#include "syncronize.h"
 
 class CalendarRepository : public QObject
 {
@@ -36,6 +33,7 @@ public:
     /* ------------------------------ Load from DB ------------------------------ */
     // Load everything from DB into memory
     void loadAll();
+    void sync();                                                         // Sync with server
     std::vector<Task *> getTasksForTimeblock(const UUID &timeblockUuid); // Load tasks for a specific timeblock into provided vector
     // --- Getters ---
     void habitCompletionPreview(Task &task); // fills task.completed_days with recent completions
@@ -45,7 +43,7 @@ public:
     // Tasks
     bool addTask(Task &task, size_t timeblockIndex);                // returns success
     bool removeTask(const char *taskUuid);                          // Delete task by UUID
-    bool updateTask(const Task &task);                                     // persist updated task
+    bool updateTask(const Task &task);                              // persist updated task
     bool moveTask(const char *taskUuid, const char *timeblockUuid); // move task to different timeblock
     // Habits
     bool addHabitEntry(const char *taskUuid, const char *dateIso8601);
@@ -63,13 +61,15 @@ public:
     bool removeEntryLink(Task *parentTask, Task *childTask, LinkType linkType = LinkType::DEPENDENCY); // Update database and in-memory model
     void getLinkedEntries(Task *task);                                                                 // Get linked tasks for a given task
     bool removeAllLinksForTask(Task *task);                                                            // Remove all links for a given task
+    bool removeAllChildrenForTask(Task *task);                                                         // Remove all child links for a given task
 
 signals:
     // Notify listeners that the model has changed
     void modelChanged();
 
 private:
-    Database m_db; //  DB interface
+    Database m_db;                //  DB interface
+    Synchronizer *m_synchronizer; // Sync interface
 
     // All tasks are stored in hash map for O(1) access by UUID, timeblocks store pointers to their tasks for organization
     TaskHash m_tasks;                    // In-memory model of tasks, keyed by UUID for fast lookup

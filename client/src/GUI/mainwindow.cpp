@@ -6,6 +6,7 @@
 
 #include "mainwindow.h"
 
+#include "clientconfig.h"
 #include "guihelper.h"
 #include "log.h"
 
@@ -26,11 +27,7 @@
 #include <string>
 
 // Asset folder for icons (used in official builds)
-#if 1
 const QString ASSET_FOLDER = "assets/";
-#else
-const QString ASSET_FOLDER = "../icons/";
-#endif
 
 /* -------------------------------------------------------------------------- */
 /*                                     GUI                                    */
@@ -111,8 +108,11 @@ MainWindow::MainWindow(QWidget *parent, CalendarRepository *dataPtr)
     addLeftEdgeButton(QIcon(ASSET_FOLDER + "settings.png"), Scene::Settings);
 
     addRightEdgeButton(QIcon(ASSET_FOLDER + "todo_list.png"), Scene::TodoList);
-    // Force everything to the top
     rightEdgeLayout->addStretch();
+    if (ClientConfig::syncEnabled())
+    {
+        addRightEdgeButton(QIcon(ASSET_FOLDER + "sync.png"), Scene::Sync);
+    }
 
     // Update the views with the current model
     modelChanged();
@@ -296,6 +296,23 @@ void MainWindow::switchRightPanel(Scene scene, QVariant data)
         rightStack->setCurrentWidget(todoListView);
         currentRightScene = Scene::NewEntryLink;
         break;
+    case Scene::Sync:
+        // Show a loading message while syncing
+        QLabel *loading = new QLabel("Syncing with server...", rightStack);
+        loading->setAlignment(Qt::AlignCenter);
+        rightStack->addWidget(loading);
+        rightStack->setCurrentWidget(loading);
+
+        currentRightScene = Scene::Sync;
+        repo->sync();
+
+        // Clean up loading message
+        rightStack->removeWidget(loading);
+        delete loading;
+
+        // After syncing, show the todo list (which should be updated with any changes from the server)
+        switchRightPanel(Scene::TodoList);
+        break;
     }
 
     LOGI(TAG, "Switched right panel to scene %d", static_cast<int>(currentRightScene));
@@ -432,11 +449,14 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
     repo->addTask(*task, timeblockIndex);
 
     // Find if a prerequisite was selected in NewEntryView and create the entry link
-    std::string prereq = newEntryView->takePrereqUuid();
-    if (!prereq.empty())
+    std::vector<Task *> prereqs;
+    newEntryView->getPrerequisites(prereqs);
+
+    LOGI(TAG, "Task <%s> has %zu prerequisites", task->name, prereqs.size());
+    for (const Task *p : prereqs)
     {
         // Parent relies on child, so prereq is the child and the new task is the parent in the dependency link
-        Task *child = repo->findTaskByUuid(prereq.c_str());
+        Task *child = const_cast<Task *>(p);
         Task *parent = repo->findTaskByUuid(task->uuid);
         if (parent && child)
         {
@@ -446,9 +466,6 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
         {
             LOGW(TAG, "Could not create entry link: parent or child task not found in repo");
         }
-
-        // Refresh the todo list to show the new link
-        modelChanged();
     }
 
     // We copied the Task into the Timeblock, so free the heap allocation
@@ -462,27 +479,15 @@ void MainWindow::onTaskEdited(Task *task)
     LOGI(TAG, "Task <%s> edited", task->name);
 
     // Update prerequisite links by rebuilding them
-
-    // Save new links
-    std::vector<Task *> newPrereqs;
-    std::string prereqUuid = newEntryView->takePrereqUuid();
-    if (!prereqUuid.empty())
-    {
-        Task *prereqTask = repo->findTaskByUuid(prereqUuid.c_str());
-        if (prereqTask)
-        {
-            newPrereqs.push_back(prereqTask);
-        }
-        else
-        {
-            LOGW(TAG, "Could not find prerequisite task with UUID %s", prereqUuid.c_str());
-        }
-    }
+    std::vector<Task *> newPrereqs; // Store new prerequisites before we remove links
+    newEntryView->getPrerequisites(newPrereqs);
+    LOGI(TAG, "Task <%s> has %zu prerequisites after edit", task->name, newPrereqs.size());
 
     // Remove existing links
-    repo->removeAllLinksForTask(task);
+    repo->removeAllChildrenForTask(task); // Clears task->prerequisites as well
     for (Task *prereq : newPrereqs)
     {
+        // Add to database and pushes to task->prerequisites
         repo->addEntryLink(task, prereq);
     }
 

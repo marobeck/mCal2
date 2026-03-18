@@ -35,28 +35,46 @@ namespace std
 
 class Database
 {
+    friend class Synchronizer; // Allow synchronizer to access private members for sync operations
 private:
     sqlite3 *db = nullptr;
+
+    // Helper functions for receipt tracking
+    // For timeblocks and tasks we store a snapshot of the object so receipts are self-contained.
+    void record_timeblock_receipt(const Timeblock &tb, bool deleted = false);
+    void delete_timeblock_receipt(const Timeblock &tb); // convenience wrapper
+    void record_task_receipt(const Task &task, bool deleted = false);
+    void delete_task_receipt(const Task &task); // convenience wrapper
+    void record_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
+    void delete_habit_entry_receipt(const char *task_uuid, const char *date_iso8601);
+    void record_entry_link_receipt(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    void delete_entry_link_receipt(const char *parent_uuid, const char *child_uuid, LinkType link_type);
 
 public:
     // -------------------------------------- Initialization ----------------------------------------
     Database();
     ~Database();
 
+    // ---------------------------------------- Receipt data ------------------------------------------
+    void clear_receipts(); // Clear all receipts (on completed sync)
+
     // --------------------------------------- Timeblock Data -----------------------------------------
     void insert_timeblock(const Timeblock &tb);
     void load_timeblocks(std::vector<Timeblock> &timeblocks);
     void update_timeblock(const Timeblock &tb);
-    void delete_timeblock(const char *uuid);
+    void upsert_timeblock(const Timeblock &tb);
+    void delete_timeblock(const char *uuid, bool ignore_failure = false);
 
     // ----------------------------------------- Task Data --------------------------------------------
     void insert_task(const Task &task);
     void load_tasks(TaskHash &tasks);
     void update_task(const Task &task);
-    void delete_task(const char *uuid);
+    void upsert_task(const Task &task);
+    void delete_task(const char *uuid, bool ignore_failure = false);
 
     // -------------------------------------- Habit Entry Data ----------------------------------------
     void add_habit_entry(const char *task_uuid, const char *date_iso8601);
+    void upsert_habit_entry(const char *task_uuid, const char *date_iso8601);
     void remove_habit_entry(const char *task_uuid, const char *date_iso8601);
     bool habit_entry_exists(const char *task_uuid, const char *date_iso8601);
 
@@ -67,7 +85,9 @@ public:
 
     // -------------------------------------- Entry Link Data ----------------------------------------
     void add_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
+    // void upsert_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
     void remove_entry_link(const char *parent_uuid, const char *child_uuid, LinkType link_type);
     void remove_all_links_for_task(const char *task_uuid);
+    void remove_all_child_links_for_task(const char *task_uuid);
     void get_linked_entries(const char *uuid, LinkType link_type, std::vector<char *> &outLinkedUuids);
 };

@@ -42,7 +42,8 @@ enum class Scene
     NewTimeblock,
 
     // --- Settings ---
-    Settings
+    Settings,
+    Sync // Loading screen for syncing with server
 };
 
 class MainWindow : public QMainWindow

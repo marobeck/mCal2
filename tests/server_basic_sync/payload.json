@@ -1,0 +1,58 @@
+{
+    "client_id": "test-client",
+    "last_server_version": 0,
+    "entries": [
+        {
+            "table": "timeblocks",
+            "data": {
+                "uuid": "tb1",
+                "status": 0,
+                "name": "Morning Block",
+                "description": "Start of day",
+                "day_frequency": 127,
+                "duration": 3600,
+                "start": 800,
+                "day_start": 0,
+                "completed_datetime": null,
+                "modified_at": 1741023001,
+                "deleted_at": null
+            }
+        },
+        {
+            "table": "tasks",
+            "data": {
+                "uuid": "task1",
+                "timeblock_uuid": "tb1",
+                "name": "Test Task",
+                "description": "Testing sync",
+                "due_date": null,
+                "priority": 1,
+                "scope": 1,
+                "status": 0,
+                "goal_spec": 0,
+                "completed_datetime": null,
+                "modified_at": 1741023002,
+                "deleted_at": null
+            }
+        },
+        {
+            "table": "habit_entries",
+            "data": {
+                "task_uuid": "task1",
+                "date": "2026-03-02",
+                "modified_at": 1741023003,
+                "deleted_at": null
+            }
+        },
+        {
+            "table": "entry_links",
+            "data": {
+                "parent_uuid": "task1",
+                "child_uuid": "task1",
+                "link_type": 1,
+                "modified_at": 1741023004,
+                "deleted_at": null
+            }
+        }
+    ]
+}

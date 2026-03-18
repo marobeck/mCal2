@@ -129,30 +129,40 @@ NewEntryView::NewEntryView(QWidget *parent)
     completionLayout->addWidget(m_weekdayWidget);
 
     // --- Prerequisites box (only for tasks) ---
-    m_prereqBox = new QWidget(this);
-    QHBoxLayout *prereqLayout = new QHBoxLayout(m_prereqBox);
+    m_prereqBox = new QWidget(this); // Main containter for prerequisites section
+    QVBoxLayout *prereqLayout = new QVBoxLayout(m_prereqBox);
     prereqLayout->setContentsMargins(0, 0, 0, 0);
     QLabel *prereqLabel = new QLabel("Prerequisites:", m_prereqBox);
-    m_prereqPlusBtn = new QPushButton("+", m_prereqBox);
-    m_prereqOkBtn = new QPushButton("OK", m_prereqBox);
-    m_prereqCancelBtn = new QPushButton("Cancel", m_prereqBox);
-    m_prereqOkBtn->setVisible(false);
-    m_prereqCancelBtn->setVisible(false);
-    m_prereqPreviewArea = new QWidget(m_prereqBox);
+
+    // Prerequisites list
+    prereqLayout->addWidget(prereqLabel);
+    m_prereqList = new QListWidget(this);
+    prereqLayout->addWidget(m_prereqList);
+    m_buttonRow = new QWidget(this);
+    QHBoxLayout *buttonLayout = new QHBoxLayout(m_buttonRow);
+    m_addBtn = new QPushButton("Add", this);
+    m_removeBtn = new QPushButton("Remove", this);
+    buttonLayout->addWidget(m_addBtn);
+    buttonLayout->addWidget(m_removeBtn);
+    prereqLayout->addWidget(m_buttonRow);
+    m_linkRow = new QWidget(this);
+    QHBoxLayout *linkLayout = new QHBoxLayout(m_linkRow);
+    m_prereqPreviewArea = new QWidget(this);
     QHBoxLayout *previewLayout = new QHBoxLayout(m_prereqPreviewArea);
     previewLayout->setContentsMargins(0, 0, 0, 0);
-    m_prereqPreviewArea->setVisible(false);
-
-    prereqLayout->addWidget(prereqLabel, 1);
-    prereqLayout->addWidget(m_prereqPreviewArea, 2);
-    prereqLayout->addWidget(m_prereqPlusBtn, 0);
-    prereqLayout->addWidget(m_prereqOkBtn, 0);
-    prereqLayout->addWidget(m_prereqCancelBtn, 0);
+    linkLayout->addWidget(m_prereqPreviewArea, 1);
+    m_prereqOkBtn = new QPushButton("Confirm", this);
+    m_prereqCancelBtn = new QPushButton("Cancel", this);
+    linkLayout->addWidget(m_prereqOkBtn, 0);
+    linkLayout->addWidget(m_prereqCancelBtn, 0);
+    prereqLayout->addWidget(m_linkRow);
+    m_linkRow->setVisible(false);
 
     completionLayout->addWidget(m_prereqBox);
 
     // Connect prerequisite buttons
-    connect(m_prereqPlusBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqPlusClicked);
+    connect(m_addBtn, &QPushButton::clicked, this, &NewEntryView::onAddClicked);
+    connect(m_removeBtn, &QPushButton::clicked, this, &NewEntryView::onRemoveClicked);
     connect(m_prereqOkBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqOkClicked);
     connect(m_prereqCancelBtn, &QPushButton::clicked, this, &NewEntryView::onPrereqCancelClicked);
 
@@ -191,17 +201,18 @@ void NewEntryView::clearFields()
     m_dueEdit->setDateTime(QDateTime::currentDateTime());
     m_undatedCheck->setChecked(false);
     m_timeblockCombo->setEnabled(true);
+    m_prereqList->clear();
+    m_prereqCandidates.clear();
+    m_selectedPrereq = nullptr;
 }
 
-void NewEntryView::onPrereqPlusClicked()
+void NewEntryView::onAddClicked()
 {
-    // Enter link-selection mode: show OK/Cancel, hide plus, notify MainWindow
-    m_prereqPlusBtn->setVisible(false);
-    m_prereqOkBtn->setVisible(true);
-    m_prereqCancelBtn->setVisible(true);
-    m_prereqPreviewArea->setVisible(true);
+    // Enter link-selection mode: show link row, hide button row, notify MainWindow
+    m_buttonRow->setVisible(false);
+    m_linkRow->setVisible(true);
     m_linkModeActive = true;
-    m_prereqUuid.clear();
+    m_selectedPrereq = nullptr; // Clear any previously selected prerequisite
     if (m_prereqPreviewWidget)
     {
         delete m_prereqPreviewWidget;
@@ -213,21 +224,34 @@ void NewEntryView::onPrereqPlusClicked()
 void NewEntryView::onPrereqOkClicked()
 {
     // Confirm selection and leave link mode
-    m_prereqPlusBtn->setVisible(true);
-    m_prereqOkBtn->setVisible(false);
-    m_prereqCancelBtn->setVisible(false);
+    m_buttonRow->setVisible(true);
+    m_linkRow->setVisible(false);
     m_linkModeActive = false;
+    // Push to candidate list
+    if (m_selectedPrereq)
+    {
+        // Add to candidate list for retrieval by main window when requested (ownership transferred to caller)
+        m_prereqCandidates.push_back(m_selectedPrereq);
+
+        // Add to UI list
+        TaskItemWidget *widget = new TaskItemWidget(const_cast<Task *>(m_selectedPrereq), nullptr, this, TaskItemWidget::Mode::PREVIEW);
+        QListWidgetItem *item = new QListWidgetItem(m_prereqList);
+        item->setSizeHint(widget->sizeHint());
+        m_prereqList->addItem(item);
+        m_prereqList->setItemWidget(item, widget);
+
+        m_selectedPrereq = nullptr; // Clear selected prerequisite for next selection
+    }
     emit requestEndPrereqLink();
 }
 
 void NewEntryView::onPrereqCancelClicked()
 {
     // Cancel selection and clear preview
-    m_prereqPlusBtn->setVisible(true);
-    m_prereqOkBtn->setVisible(false);
-    m_prereqCancelBtn->setVisible(false);
+    m_buttonRow->setVisible(true);
+    m_linkRow->setVisible(false);
     m_linkModeActive = false;
-    m_prereqUuid.clear();
+    m_selectedPrereq = nullptr; // Clear selected prerequisite
     if (m_prereqPreviewWidget)
     {
         delete m_prereqPreviewWidget;
@@ -235,6 +259,16 @@ void NewEntryView::onPrereqCancelClicked()
     }
     m_prereqPreviewArea->setVisible(false);
     emit requestEndPrereqLink();
+}
+
+void NewEntryView::onRemoveClicked()
+{
+    QList<QListWidgetItem *> selected = m_prereqList->selectedItems();
+    if (selected.isEmpty())
+        return;
+    int row = m_prereqList->row(selected.first());
+    delete m_prereqList->takeItem(row);
+    m_prereqCandidates.erase(m_prereqCandidates.begin() + row);
 }
 
 void NewEntryView::previewPrerequisite(const Task *task)
@@ -253,7 +287,7 @@ void NewEntryView::previewPrerequisite(const Task *task)
         delete m_prereqPreviewWidget;
         m_prereqPreviewWidget = nullptr;
     }
-    m_prereqPreviewWidget = new TaskItemWidget(task); // Use preview constructor
+    m_prereqPreviewWidget = new TaskItemWidget(const_cast<Task *>(task)); // Use preview constructor
     QHBoxLayout *layout = qobject_cast<QHBoxLayout *>(m_prereqPreviewArea->layout());
     if (!layout)
     {
@@ -263,12 +297,14 @@ void NewEntryView::previewPrerequisite(const Task *task)
     layout->addWidget(m_prereqPreviewWidget);
     m_prereqPreviewArea->setVisible(true);
     // Store uuid for later retrieval
-    m_prereqUuid = task->uuid.value;
+    m_selectedPrereq = const_cast<Task *>(task);
 }
 
-std::string NewEntryView::takePrereqUuid()
+// Provide candidate prerequisite tasks to main window when requested
+void NewEntryView::getPrerequisites(std::vector<Task *> &prerequisits)
 {
-    return m_prereqUuid;
+    // Prerequisits are now owned by caller and local list is cleared for next time
+    prerequisits = std::move(m_prereqCandidates);
 }
 
 void NewEntryView::loadTaskForEditing(Task *task)
@@ -380,13 +416,29 @@ void NewEntryView::loadTaskForEditing(Task *task)
         }
     }
 
-    // Prerequisite preview
+    // --- Prerequisite preview ---
     LOGI(TAG, "Task has %zu prerequisites", task->prerequisites.size());
+    m_prereqList->clear();
+    m_prereqCandidates.clear();
+    for (Task *p : task->prerequisites)
+    {
+        m_prereqCandidates.push_back(p);
+    }
+
+    // Display list of previewable prerequisites (if any)
     if (!task->prerequisites.empty())
-    { // For simplicity, only preview the first prerequisite if multiple are present
-        const char *prereqName = task->prerequisites[0]->name ? task->prerequisites[0]->name : "(null)";
-        LOGI(TAG, "Previewing prerequisite task: %s", prereqName);
-        previewPrerequisite(task->prerequisites[0]);
+    {
+        for (Task *p : task->prerequisites)
+        {
+            if (!p)
+                continue;
+            QListWidgetItem *item = new QListWidgetItem(m_prereqList);
+            // Display item in preview mode (no modifications can be made from here, so we don't need repo reference)
+            TaskItemWidget *widget = new TaskItemWidget(const_cast<Task *>(p), nullptr, this, TaskItemWidget::Mode::PREVIEW);
+            item->setSizeHint(widget->sizeHint());
+            m_prereqList->addItem(item);
+            m_prereqList->setItemWidget(item, widget);
+        }
     }
 }
 
@@ -402,6 +454,9 @@ void NewEntryView::onTypeChanged(int index)
             m_freqWidget->setVisible(false);
         if (m_weekdayWidget)
             m_weekdayWidget->setVisible(false);
+        // Show prerequisites section for tasks
+        if (m_prereqBox)
+            m_prereqBox->setVisible(true);
     }
     else if (index == 1)
     {
@@ -412,6 +467,9 @@ void NewEntryView::onTypeChanged(int index)
             m_freqWidget->setVisible(true);
         if (m_weekdayWidget)
             m_weekdayWidget->setVisible(false);
+        // Hide prerequisites section for habits (wouldn't work well)
+        if (m_prereqBox)
+            m_prereqBox->setVisible(false);
     }
     else
     {
@@ -422,6 +480,9 @@ void NewEntryView::onTypeChanged(int index)
             m_freqWidget->setVisible(false);
         if (m_weekdayWidget)
             m_weekdayWidget->setVisible(true);
+        // Hide prerequisites section for habits (wouldn't work well)
+        if (m_prereqBox)
+            m_prereqBox->setVisible(false);
     }
 }
 

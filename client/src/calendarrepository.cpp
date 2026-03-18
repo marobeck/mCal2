@@ -12,12 +12,19 @@
 /* -------------------------------------------------------------------------- */
 
 CalendarRepository::CalendarRepository()
+    : m_synchronizer(new Synchronizer(m_db, this))
 {
+    connect(m_synchronizer, &Synchronizer::syncCompleted, this, [this]()
+            {
+                m_db.clear_receipts(); // Clear receipts on completed sync
+                LOGI("CalendarRepository", "Sync completed, reloading all data from database");
+                loadAll(); });
     loadAll();
 }
 
 CalendarRepository::~CalendarRepository()
 {
+    delete m_synchronizer;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -50,9 +57,15 @@ void CalendarRepository::loadAll()
     m_db.load_timeblocks(m_timeblocks);
     m_db.load_tasks(m_tasks);
 
-    // Load habit preview for any habit tasks
+    // Fill tasks with relational data
     for (auto &[uuid, taskptr] : m_tasks)
     {
+        // Load task links
+        std::vector<char *> prereqUuids;
+        m_db.get_linked_entries(uuid, LinkType::DEPENDENCY, prereqUuids);
+        findTasksByList(prereqUuids, taskptr->prerequisites);
+
+        // Load habit preview for any habit tasks
         if (taskptr->status == TaskStatus::HABIT)
         {
             // Load habit completion preview
@@ -65,6 +78,13 @@ void CalendarRepository::loadAll()
     {
         tb.tasks = getTasksForTimeblock(tb.uuid);
     }
+
+    emit modelChanged();
+}
+
+void CalendarRepository::sync()
+{
+    m_synchronizer->sync();
 }
 
 void CalendarRepository::habitCompletionPreview(Task &task)
@@ -204,6 +224,18 @@ Task *CalendarRepository::findTaskByUuid(const char *uuid)
     return nullptr;
 }
 
+void CalendarRepository::findTasksByList(const std::vector<char *> &uuids, std::vector<Task *> &outTasks)
+{
+    for (const char *uuid : uuids)
+    {
+        Task *t = findTaskByUuid(uuid);
+        if (t)
+        {
+            outTasks.push_back(t);
+        }
+    }
+}
+
 Timeblock *CalendarRepository::findTimeblockByUuid(const char *uuid)
 {
     for (auto &tb : m_timeblocks)
@@ -298,6 +330,17 @@ bool CalendarRepository::removeTask(const char *taskUuid)
     if (!tb)
     {
         LOGE(TAG, "Timeblock with UUID <%s> not found in memory, cannot remove task <%s>", taskToRemove->timeblock_uuid.value, taskToRemove->name);
+        return false;
+    }
+
+    // Remove all links
+    try
+    {
+        m_db.remove_all_links_for_task(taskUuid);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to delete task from database: %d", err);
         return false;
     }
 
@@ -500,7 +543,7 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         return false;
     }
 
-    // Update in-memory model: find the task and refresh its habit preview, then reposition by urgency
+    // Update in-memory model: find the task and refresh its habit preview
     Task *habit = findTaskByUuid(taskUuid);
     if (habit)
     {
@@ -513,8 +556,9 @@ bool CalendarRepository::removeHabitEntry(const char *taskUuid, const char *date
         m_db.add_habit_entry(taskUuid, dateIso8601); // Rollback database change since task doesn't exist in memory
         return false;
     }
-
+    // Notify listeners of change, reposition by urgency
     emit modelChanged();
+
     return true;
 }
 
@@ -659,6 +703,28 @@ bool CalendarRepository::removeAllLinksForTask(Task *task)
         prereq->prerequisites.erase(std::remove(prereq->prerequisites.begin(), prereq->prerequisites.end(), task), prereq->prerequisites.end());
         LOGI(TAG, "Removed prerequisite link in memory: <%s> no longer depends on <%s>", prereq->name, task->name);
     }
+
+    task->prerequisites.clear();
+    LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
+    return true;
+}
+
+bool CalendarRepository::removeAllChildrenForTask(Task *task)
+{
+    const char *TAG = "CalendarRepository::removeAllLinksForTask";
+
+    try
+    {
+        m_db.remove_all_child_links_for_task(task->uuid);
+        LOGI(TAG, "Removed all child entry links of <%s> from database", task->name);
+    }
+    catch (int err)
+    {
+        LOGE(TAG, "Failed to remove all entry links for task from database: %d", err);
+        return false;
+    }
+
+    // --- Update in-memory model ---
 
     task->prerequisites.clear();
     LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);

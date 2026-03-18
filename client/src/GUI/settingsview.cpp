@@ -1,6 +1,7 @@
 #include "settingsview.h"
-#include "log.h"
+#include "clientconfig.h"
 #include "task.h"
+#include "log.h"
 
 #include <QVBoxLayout>
 #include <QLabel>
@@ -13,26 +14,11 @@
 
 ScoreWeights g_score_weights; // Global variable to hold current score weights
 
-static QString settingsFilePath()
-{
-    // Use asset folder
-    QString assetPath = QCoreApplication::applicationDirPath() + "/assets";
-    if (QDir(assetPath).exists())
-        return assetPath + "/settings.ini";
-    else
-    {
-        // Fallback to standard config location
-        QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-        QDir().mkpath(configDir); // Ensure directory exists
-        return configDir + "/settings.ini";
-    }
-}
-
 void SettingsView::FindScoreWeights()
 {
     const char *TAG = "SettingsView::FindScoreWeights";
 
-    QString path = settingsFilePath();
+    QString path = ClientConfig::settingsFilePath();
     QSettings s(path, QSettings::IniFormat);
 
     // Clear combo and fill with groups named "Profile:<name>"
@@ -133,9 +119,10 @@ void SettingsView::onProfileChanged(int index)
     if (groupKey.isEmpty())
         return;
 
-    QString path = settingsFilePath();
+    QString path = ClientConfig::settingsFilePath();
     QSettings s(path, QSettings::IniFormat);
 
+    // Read weights from selected profile group
     s.beginGroup(groupKey);
     double due = s.value("due_date_weight", 1.0).toDouble();
     double pri = s.value("priority_weight", 1.0).toDouble();
