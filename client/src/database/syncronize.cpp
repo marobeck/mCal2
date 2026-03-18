@@ -110,9 +110,16 @@ void Synchronizer::onSyncReply(QNetworkReply *reply)
 {
     const char *TAG = "Synchronizer::onSyncReply";
 
-    if (reply->url().toString() != serverUrl)
+    QUrl expected(serverUrl);
+    QUrl actual = reply->url();
+
+    if (expected.scheme() != actual.scheme() ||
+        expected.host() != actual.host() ||
+        expected.port() != actual.port() ||
+        expected.path() != actual.path())
     {
-        LOGW(TAG, "Received reply from unexpected URL: %s", qPrintable(reply->url().toString()));
+        LOGW(TAG, "Received reply from unexpected URL: %s", qPrintable(actual.toString()));
+        LOGW(TAG, "Expected URL: %s", qPrintable(expected.toString()));
         reply->deleteLater();
         return;
     }
