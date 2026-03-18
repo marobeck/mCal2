@@ -17,15 +17,15 @@ ClientConfig::ClientConfig()
 
         // Fill out sync data with default values
         s.beginGroup("Sync");
-        s.setValue("enabled", true);
+        s.setValue("enabled", false);
         s.setValue("server_address", "http://localhost:8001/sync");
         s.setValue("server_port", 8001);
         s.setValue("client_id", "mcal2-client");
 
         // Defalt cert values
-        s.setValue("client_cert", "certs/client.crt");
-        s.setValue("client_key", "certs/client.key");
-        s.setValue("server_ca", "certs/server_ca.crt");
+        s.setValue("client_cert_path", "certs/client.crt");
+        s.setValue("client_key_path", "certs/client.key");
+        s.setValue("server_ca_path", "certs/server_ca.crt");
         s.endGroup();
 
         // Create a default score weight profile
