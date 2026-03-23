@@ -33,7 +33,11 @@ private:
     QLabel *m_priorityLabel = nullptr;
     QLabel *m_urgencyLabel = nullptr;
     // Prerequisite list container (compact-mode TaskItemWidgets)
+    QLabel *m_prereqLabel = nullptr;
     QListWidget *m_prereqList = nullptr;
+    // Dependency list container
+    QLabel *m_dependentLabel = nullptr;
+    QListWidget *m_dependentList = nullptr;
     // Habit functions
     QPushButton *m_addHabitEntryBtn = nullptr;
     HabitProgressWidget *m_habitProgress = nullptr;

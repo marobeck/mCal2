@@ -34,12 +34,26 @@ EntryDetailsView::EntryDetailsView(QWidget *parent)
     layout->addWidget(m_descLabel);
 
     // Prerequisite list container (compact-mode TaskItemWidgets)
+    m_prereqLabel = new QLabel("Prerequisites:", this);
     m_prereqList = new QListWidget(this);
     m_prereqList->setStyleSheet("QListWidget { background: transparent; border: none; }");
     m_prereqList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    m_prereqList->setVisible(false); // hidden until prerequisites exist
+    m_prereqLabel->setVisible(false); // hidden until prerequisites exist
+    m_prereqList->setVisible(false);  // hidden until prerequisites exist
+    layout->addWidget(m_prereqLabel);
     layout->addWidget(m_prereqList);
+
+    // Prerequisite list container (compact-mode TaskItemWidgets)
+    m_dependentLabel = new QLabel("Dependencies:", this);
+    m_dependentList = new QListWidget(this);
+    m_dependentList->setStyleSheet("QListWidget { background: transparent; border: none; }");
+    m_dependentList->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    m_dependentLabel->setVisible(false);
+    m_dependentList->setVisible(false);
+    layout->addWidget(m_dependentLabel);
+    layout->addWidget(m_dependentList);
 
     // Habit progress widget (created but hidden until a habit is loaded)
     m_habitProgress = new HabitProgressWidget(this);
@@ -162,7 +176,10 @@ void EntryDetailsView::loadTask(const Task *task)
         for (Task *p : task->prerequisites)
         {
             if (!p)
+            {
+                LOGW(TAG, "Null prereq found, skipping");
                 continue;
+            }
             QListWidgetItem *item = new QListWidgetItem(m_prereqList);
             // Display item in preview mode (no modifications can be made from here, so we don't need repo reference)
             TaskItemWidget *widget = new TaskItemWidget(p, nullptr, this, TaskItemWidget::Mode::PREVIEW);
@@ -173,7 +190,32 @@ void EntryDetailsView::loadTask(const Task *task)
         hasPrereqs = true;
     }
 
+    m_prereqLabel->setVisible(hasPrereqs);
     m_prereqList->setVisible(hasPrereqs);
+
+    // Dependencies: show compact widgets for each prereq task (if any)
+    // Update the list widget with the top tasks
+    m_dependentList->clear();
+
+    bool hasDependent = false;
+    if (!task->dependents.empty())
+    {
+        for (Task *d : task->dependents)
+        {
+            if (!d)
+                continue;
+            QListWidgetItem *item = new QListWidgetItem(m_dependentList);
+            // Display item in preview mode (no modifications can be made from here, so we don't need repo reference)
+            TaskItemWidget *widget = new TaskItemWidget(d, nullptr, this, TaskItemWidget::Mode::PREVIEW);
+            item->setSizeHint(widget->sizeHint());
+            m_dependentList->addItem(item);
+            m_dependentList->setItemWidget(item, widget);
+        }
+        hasDependent = true;
+    }
+
+    m_dependentLabel->setVisible(hasDependent);
+    m_dependentList->setVisible(hasDependent);
 
     // Habit data
     if (task->status == TaskStatus::HABIT)
