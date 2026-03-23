@@ -1342,7 +1342,7 @@ void Database::remove_all_child_links_for_task(const char *task_uuid)
 {
     const char *TAG = "DB::remove_all_links_for_task";
 
-    // Delete all links where the task is either the parent of a child child
+    // Delete all links where the task is the parent of a child
     // return the deleted links so we can record receipts for them
     const char *sql =
         "DELETE FROM entry_links "
@@ -1358,7 +1358,6 @@ void Database::remove_all_child_links_for_task(const char *task_uuid)
     }
 
     sqlite3_bind_text(stmt, 1, task_uuid, -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, task_uuid, -1, SQLITE_STATIC);
 
     int rc;
     int count = 0;
