@@ -56,6 +56,12 @@ void OverviewView::updateOverview()
     // Iterate through tasks to get the most urgent ones and tasks completed today.
     for (auto &[uuid, taskPtr] : repo->tasks())
     {
+        if (!taskPtr)
+        {
+            LOGW(TAG, "Skipping invalid pointer in memory");
+            continue;
+        }
+
         // Iterate through all ongoing tasks
         if (taskPtr->status == TaskStatus::INCOMPLETE || taskPtr->status == TaskStatus::HABIT)
         {
@@ -94,7 +100,6 @@ void OverviewView::updateOverview()
     }
 
     // --- Update ledger of tasks completed today ---
-
     if (completedToday.empty())
     {
         m_completedTasksList->clear();
