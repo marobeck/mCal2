@@ -10,6 +10,7 @@
 
 #define UUID_LEN 37 // 36 chars + null
 
+// Unordered map with key UUID and value Task pointer
 #define TaskHash std::unordered_map<UUID, std::unique_ptr<Task>>
 
 struct UUID
