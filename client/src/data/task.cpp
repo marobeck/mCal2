@@ -397,6 +397,8 @@ inline float compute_deadline_pressure(time_t now, time_t due)
 
 float Task::get_urgency() const
 {
+    const char *TAG = "Task::get_urgency";
+
     // Constants
     const float C = g_score_weights.undated_pressure_constant; // Undated pressure constant
     const float w_p = g_score_weights.priority_weight;         // Priority weight
@@ -413,17 +415,18 @@ float Task::get_urgency() const
         return 0.0f;
     }
 
-    // Urgency is -1 if blocked by an incomplete prerequisite
+    // Urgency is negative if blocked by an incomplete prerequisite
+    bool blocked = false;
     for (const Task *prereq : prerequisites)
     {
         if (prereq->status != TaskStatus::COMPLETE)
         {
-            return -1.0f;
+            blocked = true;
+            break;
         }
     }
 
     // --- Calculate urgency ---
-    //! Should have multiple types of sorting factors, for now we do hardest first
 
     /** Eat the frog
       score_frog = w_u * U
@@ -438,5 +441,26 @@ float Task::get_urgency() const
     // Compute deadline pressure, from [0, 1] or [1, inf) if overdue, or constant C if undated
     double pressure = due_date ? compute_deadline_pressure(time(nullptr), due_date) : C;
 
-    return w_u * pressure + w_p * P_norm + w_e * E_norm;
+    float intrinsic_urgency = (w_u * pressure + w_p * P_norm + w_e * E_norm) * status_weight(status);
+
+    // Inherted urgency
+    float max_inherited_urgency = 0.0f;
+    for (const Task *dep : dependents)
+    {
+        if (!dep)
+        {
+            LOGW(TAG, "Skipping invalid dependency pointer");
+        }
+        // Use abs() because a dependent might be blocked (returning negative),
+        // but we still need its true potential urgency.
+        float dep_urgency = std::abs(dep->get_urgency());
+        if (dep_urgency > max_inherited_urgency)
+        {
+            max_inherited_urgency = dep_urgency;
+        }
+    }
+
+    float true_urgency = std::max(intrinsic_urgency, max_inherited_urgency);
+
+    return blocked ? -true_urgency : true_urgency;
 }

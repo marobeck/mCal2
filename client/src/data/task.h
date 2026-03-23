@@ -74,6 +74,8 @@ public:
 
     // Prerequisite task(s) that must be completed before this one can be completed; empty if no prerequisite
     std::vector<Task *> prerequisites;
+    // Tasks that depend on this task being completed
+    std::vector<Task *> dependents;
 
     // --- Habit parameters ---
 
