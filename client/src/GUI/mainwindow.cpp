@@ -468,35 +468,56 @@ void MainWindow::onTaskCreated(Task *task, int timeblockIndex)
         }
     }
 
+    if (!prereqs.empty())
+    {
+        emit modelChanged(); // Update list to display new entry links
+    }
+
     // We copied the Task into the Timeblock, so free the heap allocation
     delete task;
 }
 
+/**
+ * @param task A copy of the edited task (NOT THE TASK IN HEAP)
+ */
 void MainWindow::onTaskEdited(Task *task)
 {
     const char *TAG = "MainWindow::onTaskEdited";
 
     LOGI(TAG, "Task <%s> edited", task->name);
 
-    // Update prerequisite links by rebuilding them
-    std::vector<Task *> newPrereqs; // Store new prerequisites before we remove links
+    // Find the actual task in the repository to avoid dangling pointers
+    Task *actualTask = repo->findTaskByUuid(task->uuid);
+    if (!actualTask)
+    {
+        LOGE(TAG, "Could not find task '%s' in repository", task->name);
+        delete task;
+        return;
+    }
+
+    // Get new prerequisites from the UI
+    std::vector<Task *> newPrereqs;
     newEntryView->getPrerequisites(newPrereqs);
     LOGI(TAG, "Task <%s> has %zu prerequisites after edit", task->name, newPrereqs.size());
 
-    // Remove existing links
-    repo->removeAllChildrenForTask(task); // Clears task->prerequisites as well
+    // Remove existing links using the actual task
+    repo->removeAllChildrenForTask(actualTask);
+
+    // Add new links using the actual task (not the temporary!)
     for (Task *prereq : newPrereqs)
     {
-        // Add to database and pushes to task->prerequisites
-        repo->addEntryLink(task, prereq);
+        repo->addEntryLink(actualTask, prereq);
     }
 
-    if (!repo->updateTask(*task))
+    // Update the actual task in the database with edited data
+    actualTask = task;
+
+    if (!repo->updateTask(*actualTask))
     {
         LOGE(TAG, "Failed to update task <%s>", task->name);
     }
 
-    // We copied the Task into the Timeblock, so free the heap allocation
+    // Now we can safely delete the temporary
     delete task;
 }
 
