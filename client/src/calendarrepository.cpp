@@ -65,6 +65,15 @@ void CalendarRepository::loadAll()
         m_db.get_linked_entries(uuid, LinkType::DEPENDENCY, prereqUuids);
         findTasksByList(prereqUuids, taskptr->prerequisites);
 
+        // Build reverse dependents lists (ensure loaded tasks have proper back-pointers)
+        for (Task *prereq : taskptr->prerequisites)
+        {
+            if (prereq)
+            {
+                prereq->dependents.push_back(taskptr.get());
+            }
+        }
+
         // Load habit preview for any habit tasks
         if (taskptr->status == TaskStatus::HABIT)
         {
@@ -333,15 +342,17 @@ bool CalendarRepository::removeTask(const char *taskUuid)
         return false;
     }
 
-    // Remove all links
-    try
+    // Remove links
+    Task *mdf_task = findTaskByUuid(taskUuid);
+    removeAllLinksForTask(mdf_task);
+
+    // Also remove from timeblock task list (avoid dangling pointers in views)
+    auto &tasks = tb->tasks;
+    auto it = std::find_if(tasks.begin(), tasks.end(), [taskToRemove](Task *t)
+                           { return t == taskToRemove; });
+    if (it != tasks.end())
     {
-        m_db.remove_all_links_for_task(taskUuid);
-    }
-    catch (int err)
-    {
-        LOGE(TAG, "Failed to delete task from database: %d", err);
-        return false;
+        tasks.erase(it);
     }
 
     // Remove from database
@@ -355,22 +366,11 @@ bool CalendarRepository::removeTask(const char *taskUuid)
         return false;
     }
 
-    // Remove from in-memory model
-    auto &tasks = tb->tasks;
-    auto it = std::find_if(tasks.begin(), tasks.end(), [taskToRemove](Task *t)
-                           { return t == taskToRemove; });
-    if (it != tasks.end())
+    int ret = m_tasks.erase(taskUuid);
+    if (!ret)
     {
-        tasks.erase(it);
+        LOGW(TAG, "No task was removed from memory model");
     }
-    else
-    {
-        LOGW(TAG, "Task <%s> not found in timeblock <%s>", taskToRemove->name, tb->name);
-        return false;
-    }
-
-    // Remove from task map
-    m_tasks.erase(taskUuid);
 
     // Notify listeners
     emit modelChanged();
@@ -631,6 +631,7 @@ bool CalendarRepository::addEntryLink(Task *parentTask, Task *childTask, LinkTyp
     if (linkType == LinkType::DEPENDENCY)
     {
         parentTask->prerequisites.push_back(childTask);
+        childTask->dependents.push_back(parentTask);
         LOGI(TAG, "Added dependency link in memory: <%s> depends on <%s>", parentTask->name, childTask->name);
     }
     else if (linkType == LinkType::HABIT_TRIGGER)
@@ -665,6 +666,7 @@ bool CalendarRepository::removeEntryLink(Task *parentTask, Task *childTask, Link
     if (linkType == LinkType::DEPENDENCY)
     {
         parentTask->prerequisites.erase(std::remove(parentTask->prerequisites.begin(), parentTask->prerequisites.end(), childTask), parentTask->prerequisites.end());
+        childTask->dependents.erase(std::remove(childTask->dependents.begin(), childTask->dependents.end(), parentTask), childTask->dependents.end());
         LOGI(TAG, "Removed dependency link in memory: <%s> no longer depends on <%s>", parentTask->name, childTask->name);
     }
     else if (linkType == LinkType::HABIT_TRIGGER)
@@ -697,21 +699,35 @@ bool CalendarRepository::removeAllLinksForTask(Task *task)
 
     // --- Update in-memory model ---
 
-    // Find and remove all links where this task is the parent
+    // Remove this task from all prerequisites dependents lists (incoming links)
     for (Task *prereq : task->prerequisites)
     {
-        prereq->prerequisites.erase(std::remove(prereq->prerequisites.begin(), prereq->prerequisites.end(), task), prereq->prerequisites.end());
-        LOGI(TAG, "Removed prerequisite link in memory: <%s> no longer depends on <%s>", prereq->name, task->name);
+        if (prereq)
+        {
+            prereq->dependents.erase(std::remove(prereq->dependents.begin(), prereq->dependents.end(), task), prereq->dependents.end());
+            LOGI(TAG, "Removed dependency in memory: <%s> no longer has dependent <%s>", prereq->name, task->name);
+        }
+    }
+
+    // Remove this task from all dependents prerequisites lists (outgoing links)
+    for (Task *dependent : task->dependents)
+    {
+        if (dependent)
+        {
+            dependent->prerequisites.erase(std::remove(dependent->prerequisites.begin(), dependent->prerequisites.end(), task), dependent->prerequisites.end());
+            LOGI(TAG, "Removed dependency in memory: <%s> no longer depends on <%s>", dependent->name, task->name);
+        }
     }
 
     task->prerequisites.clear();
-    LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
+    task->dependents.clear();
+    LOGI(TAG, "Cleared all linkage in memory for task <%s>", task->name);
     return true;
 }
 
 bool CalendarRepository::removeAllChildrenForTask(Task *task)
 {
-    const char *TAG = "CalendarRepository::removeAllLinksForTask";
+    const char *TAG = "CalendarRepository::removeAllChildrenForTask";
 
     try
     {
@@ -720,11 +736,20 @@ bool CalendarRepository::removeAllChildrenForTask(Task *task)
     }
     catch (int err)
     {
-        LOGE(TAG, "Failed to remove all entry links for task from database: %d", err);
+        LOGE(TAG, "Failed to remove all child entry links for task from database: %d", err);
         return false;
     }
 
     // --- Update in-memory model ---
+
+    for (Task *prereq : task->prerequisites)
+    {
+        if (prereq)
+        {
+            prereq->dependents.erase(std::remove(prereq->dependents.begin(), prereq->dependents.end(), task), prereq->dependents.end());
+            LOGI(TAG, "Removed prerequisite link in memory: <%s> no longer has dependent <%s>", prereq->name, task->name);
+        }
+    }
 
     task->prerequisites.clear();
     LOGI(TAG, "Cleared all prerequisite links in memory for task <%s>", task->name);
